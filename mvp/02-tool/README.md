@@ -24,14 +24,6 @@ npm run tool:02
 
 ### Tool 03 · Model Chooses Tool
 
-复用 DeepSeek 配置：
-
-```env
-MODEL_API_KEY=
-MODEL_BASE_URL=https://api.deepseek.com
-MODEL_NAME=deepseek-flash
-```
-
 ```bash
 npm run tool:03 -- "请使用可用工具计算 123 + 456"
 ```
@@ -58,16 +50,38 @@ npm run tool:04 -- "请使用可用工具计算 123 + 456"
 ```text
 Tool Call
 ↓
-校验 Tool name
+校验 name / arguments
 ↓
-解析 / 校验 arguments
-↓
-执行 add()
+Application 执行 add()
 ↓
 Tool Result
 ```
 
 详细说明：[`04-execute-tool/README.md`](./04-execute-tool/README.md)
+
+### Tool 05 · Tool Result → Model
+
+```bash
+npm run tool:05 -- "请使用可用工具计算 123 + 456"
+```
+
+重点看：
+
+```text
+First LLM Request
+↓
+Tool Call
+↓
+Tool Result
+↓
+role = tool
+↓
+Second LLM Request
+↓
+Final Assistant
+```
+
+详细说明：[`05-tool-result-to-model/README.md`](./05-tool-result-to-model/README.md)
 
 ---
 
@@ -95,8 +109,8 @@ Tool Result
 01 Local Function         ✅
 02 Tool Schema            ✅
 03 Model Chooses Tool     ✅
-04 Execute Tool           ← 当前
-05 Tool Result → Model    ← 后续
+04 Execute Tool           ✅
+05 Tool Result → Model    ← 当前
 06 Multiple Tools         ← 后续
 07 Unified Tool Interface ← 后续
 ```
@@ -108,12 +122,6 @@ Tool Result
 核心问题：**Tool 到底是什么？**
 
 > **Tool = 程序可以执行的一项能力。**
-
-```ts
-function add(a: number, b: number) {
-  return a + b
-}
-```
 
 ```text
 Input
@@ -139,23 +147,13 @@ Tool Schema
 = 给模型理解
 ```
 
-Schema 描述：
-
-```text
-name
-description
-parameters
-type
-required
-```
-
 详细说明：[`02-tool-schema/README.md`](./02-tool-schema/README.md)
 
 ---
 
 # Tool 03 · Model Chooses Tool
 
-核心问题：**模型看到 Tool Schema 后，怎么表达“我要调用这个 Tool”？**
+核心问题：**模型怎么表达“我要调用这个 Tool”？**
 
 ```text
 User Prompt
@@ -164,33 +162,12 @@ Tool Schema
 ↓
 DeepSeek
 ↓
-模型决定
-├── 直接回答
-└── 返回 tool_calls
-```
-
-当模型选择 `add`：
-
-```text
-finish_reason = tool_calls
-
-message.tool_calls[0]
-├── id
-├── type = function
-└── function
-    ├── name = add
-    └── arguments = {"a":123,"b":456}
-```
-
-这一节只生成调用意图，不执行 `add()`。
-
-所以：
-
-```text
 Tool Call
-≠
-Tool Execution
+├── name
+└── arguments
 ```
+
+这一节只产生调用意图，不执行 Tool。
 
 详细说明：[`03-model-chooses-tool/README.md`](./03-model-chooses-tool/README.md)
 
@@ -198,40 +175,29 @@ Tool Execution
 
 # Tool 04 · Execute Tool
 
-核心问题：**模型已经返回 Tool Call，谁真正执行？**
+核心问题：**谁真正执行 Tool？**
 
 答案：**Application。**
 
-职责边界：
-
 ```text
 LLM
-= 决定想调用什么
+= 生成 Tool Call
 
 Application
-= 解析、校验、执行
+= 校验并执行
 
 Tool
-= 真正被执行的能力
+= 真正被调用的能力
 ```
 
-当前完整流程：
+流程：
 
 ```text
-User Prompt
-+
-Tool Schema
-↓
-DeepSeek
-↓
 Tool Call
-├── name = add
-└── arguments = { a, b }
 ↓
-Application
-├── 校验 name
-├── JSON.parse(arguments)
-└── 校验 a / b 类型
+校验 Tool name
+↓
+解析 / 校验 arguments
 ↓
 add(a, b)
 ↓
@@ -240,97 +206,141 @@ Tool Result
 STOP
 ```
 
-为什么不能直接信任模型参数？
-
-因为 `function.arguments` 是模型生成的数据。真正执行前必须：
+这一节结束时：
 
 ```text
-解析
-↓
-校验 Tool name
-↓
-校验 arguments
-↓
-执行
+程序知道结果
+模型还不知道结果
 ```
-
-当前如果输入：
-
-```text
-请使用可用工具计算 123 + 456
-```
-
-预期会观察到：
-
-```text
-name = add
-arguments = { a: 123, b: 456 }
-↓
-add(123, 456)
-↓
-579
-```
-
-但是当前仍然没有：
-
-```text
-role = tool            ❌
-tool_call_id           ❌
-把 579 发回 DeepSeek    ❌
-第二次 LLM 请求        ❌
-```
-
-所以 `tool:04` 只解决：
-
-> **谁真正执行 Tool，以及执行前为什么必须校验。**
 
 详细说明：[`04-execute-tool/README.md`](./04-execute-tool/README.md)
 
 ---
 
-## 下一步为什么是 Tool Result → Model？
+# Tool 05 · Tool Result → Model
 
-现在程序已经拿到：
+核心问题：**Tool 已经执行出结果，模型怎么知道？**
 
-```text
-Tool Result = 579
-```
-
-但 DeepSeek 不知道 Tool 最终执行出了什么。
-
-所以自然出现下一个问题：
-
-```text
-Tool Result
-↓
-怎么重新交给模型？
-```
-
-下一节才会引入：
-
-```text
-role = tool
-tool_call_id
-第二次 LLM 请求
-```
-
-完整闭环会变成：
+这一节第一次完成最小闭环：
 
 ```text
 User
 ↓
-LLM
+第一次 LLM 调用
 ↓
 Tool Call
 ↓
-Execute Tool
+Application 执行 Tool
+↓
+Tool Result
+↓
+role = tool
+↓
+第二次 LLM 调用
+↓
+Final Assistant
+```
+
+第一次请求的 messages：
+
+```text
+system
+user
+```
+
+模型返回 Tool Call 后，应用把它加入历史，再加入 Tool Result：
+
+```text
+system
+user
+assistant(tool_calls)
+tool(tool_call_id + content)
+```
+
+第二次请求就能看到完整发生过程。
+
+## role = tool
+
+Tool Result 会作为一条新的消息：
+
+```json
+{
+  "role": "tool",
+  "tool_call_id": "call_xxx",
+  "content": "579"
+}
+```
+
+其中：
+
+```text
+tool_call_id
+= 关联之前哪一次 Tool Call
+
+content
+= Tool 真正执行出来的结果
+```
+
+所以：
+
+```text
+Tool Result
+579
+
+≠
+
+Final Assistant
+123 + 456 = 579。
+```
+
+Tool 负责执行，LLM 负责继续理解和组织回答。
+
+当前代码第二次请求使用：
+
+```text
+tool_choice = none
+```
+
+因为这一节只学习固定的一次闭环，不允许模型继续产生新的 Tool Call。
+
+详细说明：[`05-tool-result-to-model/README.md`](./05-tool-result-to-model/README.md)
+
+---
+
+## 为什么 05 还不是 Agent Loop？
+
+当前流程是写死的：
+
+```text
+LLM
+↓
+最多一次 Tool Call
 ↓
 Tool Result
 ↓
 LLM
 ↓
-Assistant
+结束
 ```
+
+它还不会：
+
+```text
+LLM
+↓
+Tool
+↓
+LLM
+↓
+Tool
+↓
+LLM
+...
+```
+
+什么时候继续、什么时候停，目前都不是一个自动循环。
+
+所以 Agent Loop 还没有出现。
 
 ---
 
@@ -353,12 +363,18 @@ Assistant
 ### Tool 04
 
 - [ ] 我知道模型不会自己执行本地函数。
-- [ ] 我能解释 LLM / Application / Tool 的职责。
-- [ ] 我知道 Tool name 要校验。
-- [ ] 我知道 `function.arguments` 不能直接信任。
-- [ ] 我能看懂 arguments 的解析与类型校验。
-- [ ] 我知道 `add()` 是由应用程序真正调用的。
+- [ ] 我知道 Tool 执行前必须校验 name / arguments。
 - [ ] 我能区分 Tool Call 和 Tool Result。
-- [ ] 我知道当前 Tool Result 还没有回到模型。
 
-做到这些，就进入 **tool:05 · Tool Result → Model**。
+### Tool 05
+
+- [ ] 我知道为什么 Tool Result 要再次交给模型。
+- [ ] 我能解释 `role = tool`。
+- [ ] 我能解释 `tool_call_id`。
+- [ ] 我知道 Assistant Tool Call Message 也要放回 messages。
+- [ ] 我能看懂第二次请求的完整消息历史。
+- [ ] 我能区分 Tool Result 和 Final Assistant。
+- [ ] 我知道一个用户请求为什么会产生两次 LLM 请求。
+- [ ] 我知道当前只是一次固定闭环，还不是 Agent Loop。
+
+做到这些，就进入 **tool:06 · Multiple Tools**。
