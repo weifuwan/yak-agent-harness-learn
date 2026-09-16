@@ -1,6 +1,6 @@
 # 01 · LLM 学习
 
-> 这一阶段不从“怎么设计一个成熟 LLM Runtime”开始，而是按 LLM 应用能力的演进顺序，一点一点增加问题和能力。
+> 按 LLM 应用能力的演进顺序学习：每次只增加一个问题和一个能力。
 
 当前原则：**没有遇到问题之前，不提前引入答案。**
 
@@ -13,47 +13,54 @@ npm install
 cp .env.example .env
 ```
 
-在 `.env` 中填写 `MODEL_API_KEY` 后，可以直接复制下面的命令测试。
+在 `.env` 中填写 `MODEL_API_KEY` 后，直接运行对应阶段。
 
-### 01 Basic Call
+### 01 · Basic Call
 
 ```bash
 npm run llm:01 -- "用一句话解释 HashMap"
 ```
 
-### 02 Message Roles / Persona Comparison
+### 02 · Message Roles
 
 ```bash
 npm run llm:02 -- "解释一下 HashMap"
 ```
 
-同一个 User Prompt 会用 3 个不同 persona 运行，观察 System Prompt 对回答方式的影响。
-
-### 03 Multi-turn Messages
+### 03 · Multi-turn Messages
 
 ```bash
 npm run llm:03 -- "我叫什么？"
 ```
 
-重点观察：第二轮不带历史和带 `user1 + assistant1` 历史时，模型回答有什么区别。
-
-### 04 Streaming
+### 04 · Streaming
 
 ```bash
 npm run llm:04 -- "请详细解释 Java HashMap 的工作原理"
 ```
 
-这条命令会用同一个 Prompt 做两次请求：
+### 05 · Token / Context Window
 
-```text
-A. stream:false
-   → 等完整回答生成完，一次性拿到 message.content
-
-B. stream:true
-   → 连续收到多个 delta.content，再自己拼成完整回答
+```bash
+npm run llm:05 -- "Java HashMap"
 ```
 
-独立说明：[`04-streaming/README.md`](./04-streaming/README.md)
+也可以换一个主题：
+
+```bash
+npm run llm:05 -- "Java ThreadLocal"
+```
+
+这一步会连续做 3 轮对话，并打印：
+
+```text
+messages
+prompt_tokens
+completion_tokens
+total_tokens
+```
+
+独立说明：[`05-token-context/README.md`](./05-token-context/README.md)
 
 ---
 
@@ -77,14 +84,15 @@ B. stream:true
 08 Unified Stream Events
 ```
 
-当前学习到：
+当前进度：
 
 ```text
-01 Basic Call          ✅
-02 Message Roles       ✅
-03 Multi-turn Messages ✅
-04 Streaming           ← 当前
-05～08                 ← 暂时不展开
+01 Basic Call             ✅
+02 Message Roles          ✅
+03 Multi-turn Messages    ✅
+04 Streaming              ✅
+05 Token / Context Window ← 当前
+06～08                    ← 暂时不展开
 ```
 
 ---
@@ -92,8 +100,6 @@ B. stream:true
 # 01 · Basic Call
 
 核心问题：**一次最简单的大模型调用，到底发生了什么？**
-
-先不要 System Prompt，不要 Stream，不要 Provider 抽象。
 
 ```text
 User Prompt
@@ -107,16 +113,13 @@ HTTP Response
 Assistant Text
 ```
 
-学习目标：
+这一阶段认识：
 
-- 看清一次真实的 HTTP 请求；
-- 知道 `model` 和 `messages` 是什么；
-- 知道用户输入如何进入 `messages`；
-- 看懂完整 Provider Response；
-- 知道 Assistant 文本来自 `payload.choices[0].message.content`；
-- 明白当前代码只是“一次模型调用”，还不是 Agent。
-
-代码：[`01-basic-call/index.ts`](./01-basic-call/index.ts)
+```text
+model
+messages
+payload.choices[0].message.content
+```
 
 运行：
 
@@ -131,42 +134,25 @@ npm run llm:01 -- "用一句话解释 HashMap"
 核心问题：**为什么要把“你是谁”和“用户这次要什么”分开？**
 
 ```text
-System
-“你是谁 / 你应该怎么回答”
-        +
-User
-“这一次我要什么”
-        ↓
-      Model
-        ↓
-Assistant
-“模型的回答”
+system    = 规则 / 身份
+user      = 用户说的话
+assistant = 模型说的话
 ```
 
-需要区分：
+同时区分：
 
 ```text
 system / user / assistant
-= 消息角色（message role）
+= message role
 
 Java 工程师 / 初学者老师 / 面试官
-= System Prompt 定义的人设（persona）
+= System Prompt 定义的 persona
 ```
-
-代码：[`02-message-roles/index.ts`](./02-message-roles/index.ts)
 
 运行：
 
 ```bash
 npm run llm:02 -- "解释一下 HashMap"
-```
-
-这一阶段重点理解：
-
-```text
-User 决定“问什么”
-System 影响“以什么身份、方式和重点回答”
-Assistant 是模型生成的回答
 ```
 
 ---
@@ -175,35 +161,23 @@ Assistant 是模型生成的回答
 
 核心问题：**模型为什么看起来能记住上一轮？**
 
-最基础的答案不是“模型自动记住了”，而是：
-
-> **应用在下一次请求时，把之前的 user / assistant 消息重新放进 `messages` 发送给模型。**
+因为下一轮请求把历史重新发了一遍：
 
 ```text
-第一轮：
-System + User 1
+第一轮
+system + user1
 ↓
-Assistant 1
+assistant1
 
-第二轮：
-System + User 1 + Assistant 1 + User 2
+第二轮
+system + user1 + assistant1 + user2
 ↓
-Assistant 2
+assistant2
 ```
 
-所以最基础的多轮 History 是：
+所以：
 
-```text
-user
-assistant
-user
-assistant
-user
-assistant
-...
-```
-
-代码：[`03-multi-turn/index.ts`](./03-multi-turn/index.ts)
+> **Multi-turn 最基础的实现，就是应用保存 History，并在下一轮重新发送。**
 
 运行：
 
@@ -219,30 +193,17 @@ npm run llm:03 -- "我叫什么？"
 
 核心问题：**模型回答比较慢时，能不能生成一点，就先返回一点？**
 
-03 以前：
-
 ```text
 stream:false
-↓
-模型生成完整答案
-↓
-一次性得到 message.content
-```
+→ 等完整回答
+→ message.content
 
-04：
-
-```text
 stream:true
-↓
-delta 1
-↓
-delta 2
-↓
-delta 3
-↓
-...
-↓
-应用把所有 delta.content 拼起来
+→ delta 1
+→ delta 2
+→ delta 3
+→ ...
+→ 自己拼成完整 Assistant
 ```
 
 最重要的区别：
@@ -258,26 +219,118 @@ delta 3
 npm run llm:04 -- "请详细解释 Java HashMap 的工作原理"
 ```
 
-代码：[`04-streaming/index.ts`](./04-streaming/index.ts)
+独立说明：[`04-streaming/README.md`](./04-streaming/README.md)
 
-详细说明：[`04-streaming/README.md`](./04-streaming/README.md)
+---
 
-当前只需要理解：
+# 05 · Token / Context Window
+
+核心问题：**多轮对话的 History 可以一直无限增长吗？**
+
+不能。
+
+这一阶段认识两个新词。
+
+## Token
+
+先理解成：
+
+> **模型真正用来读取和生成文本的基本单位。**
+
+不要把 Token 简单等同于字符或单词：
 
 ```text
-stream:false → 完整结果一次性返回
-stream:true  → 连续收到很多小 delta
-完整 Assistant = 所有 delta 按顺序拼起来
+字符数 ≠ Token 数
+单词数 ≠ Token 数
 ```
 
-暂时不要引入：
+这一步直接观察 Provider 返回的 `usage`：
 
 ```text
-Provider 抽象     ❌
-LLMEvent          ❌
-Adapter           ❌
-Abort             ❌
-Retry             ❌
+prompt_tokens
+completion_tokens
+total_tokens
+```
+
+## Context Window
+
+先理解成：
+
+> **模型一次请求能够处理的上下文容量是有限的。**
+
+上下文里会逐渐塞入：
+
+```text
+System Prompt
++
+User 1
++
+Assistant 1
++
+User 2
++
+Assistant 2
++
+User 3
++
+...
+```
+
+于是从 03 的 Multi-turn 会自然走到：
+
+```text
+History 变长
+↓
+输入 Token 增加
+↓
+逐渐逼近 Context Window
+```
+
+`llm:05` 会做 3 轮连续对话：
+
+```text
+Round 1
+system + user1
+
+Round 2
+system + user1 + assistant1 + user2
+
+Round 3
+system + user1 + assistant1 + user2 + assistant2 + user3
+```
+
+每一轮都打印真实 `usage`，最后用表格对比。
+
+运行：
+
+```bash
+npm run llm:05 -- "Java HashMap"
+```
+
+代码：[`05-token-context/index.ts`](./05-token-context/index.ts)
+
+详细说明：[`05-token-context/README.md`](./05-token-context/README.md)
+
+这一阶段只需要看见问题：
+
+```text
+Multi-turn
+↓
+History 越来越长
+↓
+prompt_tokens 通常越来越多
+↓
+Context Window 有上限
+```
+
+暂时不要解决：
+
+```text
+History 截断         ❌
+Summary              ❌
+Compaction           ❌
+Token Budget Manager ❌
+Context Manager      ❌
 ```
 
 ---
@@ -287,31 +340,31 @@ Retry             ❌
 ### 01 Basic Call
 
 - [ ] 我能解释一次请求发送了什么。
-- [ ] 我能找到 User Prompt 在请求 JSON 中的位置。
-- [ ] 我能从 `payload → choices[0] → message → content` 找到最终回答。
+- [ ] 我知道 Assistant Text 从哪里取出来。
 - [ ] 我知道这还不是 Agent。
 
 ### 02 Message Roles
 
-- [ ] 我能解释 System Prompt 和 User Prompt 的区别。
-- [ ] 我能解释 `system / user / assistant` 三种消息角色。
+- [ ] 我能解释 `system / user / assistant`。
 - [ ] 我能区分 message role 和 persona。
-- [ ] 我理解为什么角色信息和任务信息要分开。
 
 ### 03 Multi-turn Messages
 
-- [ ] 我知道第二轮模型调用本身仍然是一个新的请求。
-- [ ] 我能解释为什么“不带历史”时模型不知道第一轮信息。
-- [ ] 我能解释为什么要把 `user1 + assistant1` 重新加入第二轮 messages。
-- [ ] 我理解 `assistant` 是历史上下文的一部分。
-- [ ] 我能解释“多轮对话”最基础的实现方式。
+- [ ] 我知道每一轮仍然是一次新的模型请求。
+- [ ] 我能解释为什么要重新发送 `user + assistant` History。
 
 ### 04 Streaming
 
-- [ ] 我能解释 `stream:false` 和 `stream:true` 的区别。
-- [ ] 我知道非流式读取的是 `message.content`。
-- [ ] 我知道流式过程中读取的是 `delta.content`。
-- [ ] 我能解释为什么完整 Assistant 需要把多个 delta 拼起来。
-- [ ] 我实际观察过终端里多个 delta 连续到达。
+- [ ] 我能解释 `stream:false / stream:true`。
+- [ ] 我知道 `message.content / delta.content` 的区别。
+- [ ] 我知道完整 Assistant 是多个 delta 拼起来的。
 
-等 04 真正理解以后，再进入 **05 Token / Context Window**。
+### 05 Token / Context Window
+
+- [ ] 我能用自己的话解释 Token。
+- [ ] 我能解释 `prompt_tokens / completion_tokens / total_tokens`。
+- [ ] 我能用自己的话解释 Context Window。
+- [ ] 我实际观察过 History 增长后 `prompt_tokens` 的变化。
+- [ ] 我知道 Context Window 有上限，History 不能无限增长。
+
+等 05 真正理解以后，再进入 **06 · Provider Differences**。
