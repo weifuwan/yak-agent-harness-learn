@@ -16,29 +16,44 @@
 npm run tool:01
 ```
 
-也可以传参数：
-
-```bash
-npm run tool:01 -- 12 34
-```
-
 ### Tool 02 · Tool Schema
 
 ```bash
 npm run tool:02
 ```
 
-这一轮没有 LLM，只观察：
+### Tool 03 · Model Chooses Tool
 
-```text
-add()
-= 真正可执行的函数
+需要 `.env` 中已经配置 Kimi：
 
-Tool Schema
-= 给模型看的结构化说明书
+```env
+KIMI_API_KEY=
+KIMI_BASE_URL=https://api.moonshot.cn/v1
+KIMI_MODEL=kimi-k2.6
 ```
 
-独立说明：[`02-tool-schema/README.md`](./02-tool-schema/README.md)
+先测试一个需要工具的问题：
+
+```bash
+npm run tool:03 -- "请使用可用工具计算 123 + 456"
+```
+
+再测试一个不需要 `add` 的问题：
+
+```bash
+npm run tool:03 -- "请用一句话解释 Java HashMap"
+```
+
+重点观察：
+
+```text
+finish_reason
+tool_calls
+function.name
+function.arguments
+```
+
+独立说明：[`03-model-chooses-tool/README.md`](./03-model-chooses-tool/README.md)
 
 ---
 
@@ -64,8 +79,8 @@ Tool Schema
 
 ```text
 01 Local Function         ✅
-02 Tool Schema            ← 当前
-03 Model Chooses Tool     ← 后续
+02 Tool Schema            ✅
+03 Model Chooses Tool     ← 当前
 04 Execute Tool           ← 后续
 05 Tool Result → Model    ← 后续
 06 Multiple Tools         ← 后续
@@ -78,11 +93,7 @@ Tool Schema
 
 核心问题：**Tool 到底是什么？**
 
-先理解成：
-
 > **Tool = 程序可以执行的一项能力。**
-
-当前实现：
 
 ```ts
 function add(a: number, b: number) {
@@ -112,62 +123,27 @@ npm run tool:01 -- 123 456
 
 核心问题：**模型怎么知道 Tool 叫什么、做什么、需要哪些参数？**
 
-这一轮给 `add()` 增加一份结构化说明：
-
-```text
-name
-↓
-Tool 名字
-
-description
-↓
-Tool 是做什么的
-
-parameters
-↓
-有哪些参数
-
-type
-↓
-参数是什么类型
-
-required
-↓
-哪些参数必须提供
-```
-
-当前 Schema 大致是：
-
-```json
-{
-  "type": "function",
-  "function": {
-    "name": "add",
-    "description": "计算两个数字之和。",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "a": { "type": "number" },
-        "b": { "type": "number" }
-      },
-      "required": ["a", "b"],
-      "additionalProperties": false
-    }
-  }
-}
-```
-
-最重要的是区分：
-
 ```text
 add()
 = 给程序执行
 
-addToolSchema
+Tool Schema
 = 给模型理解
 ```
 
-Schema 本身不会执行函数。
+Schema 描述：
+
+```text
+name
+
+description
+
+parameters
+
+type
+
+required
+```
 
 运行：
 
@@ -175,41 +151,117 @@ Schema 本身不会执行函数。
 npm run tool:02
 ```
 
-代码：[`02-tool-schema/index.ts`](./02-tool-schema/index.ts)
-
 详细说明：[`02-tool-schema/README.md`](./02-tool-schema/README.md)
 
 ---
 
-## 下一步为什么是 Model Chooses Tool？
+# Tool 03 · Model Chooses Tool
 
-现在已经有：
+核心问题：**模型看到 Tool Schema 后，怎么表达“我要调用这个 Tool”？**
+
+这一节第一次把 Schema 真正发给 LLM。
 
 ```text
-add()
+User Prompt
 +
-add Tool Schema
+Tool Schema
+↓
+Kimi
+↓
+模型决定
+├── 直接回答
+└── 返回 tool_calls
 ```
 
-但模型还没看到这份 Schema。
-
-下一步才会真正把 Schema 发给 LLM，然后观察：
+请求里第一次出现：
 
 ```text
-User:
-帮我算 123 + 456
+tools
+= 可供模型选择的 Tool Schema 列表
 
-↓
-LLM 看到了 add Tool Schema
+tool_choice = auto
+= 是否使用 Tool，由模型根据当前问题决定
+```
 
+如果模型选择 `add`，通常会看到：
+
+```text
+finish_reason = tool_calls
+
+message.tool_calls[0]
+├── id
+├── type = function
+└── function
+    ├── name = add
+    └── arguments = {"a":123,"b":456}
+```
+
+当前代码会把 `function.arguments` 做 `JSON.parse()`，方便观察模型生成的参数。
+
+但这一节**不会执行**：
+
+```ts
+add(123, 456)
+```
+
+所以当前完整流程停在：
+
+```text
+Tool Function
++
+Tool Schema
 ↓
-模型是否会返回：
-Tool Call
+Schema 发给模型
+↓
+模型选择 Tool
+↓
+生成 Tool Call
+↓
+STOP
+```
+
+运行：
+
+```bash
+npm run tool:03 -- "请使用可用工具计算 123 + 456"
+```
+
+代码：[`03-model-chooses-tool/index.ts`](./03-model-chooses-tool/index.ts)
+
+详细说明：[`03-model-chooses-tool/README.md`](./03-model-chooses-tool/README.md)
+
+---
+
+## 为什么 Tool Call 还不等于执行？
+
+模型返回：
+
+```text
 name = add
 arguments = { a: 123, b: 456 }
 ```
 
-这一阶段先只观察模型的选择，仍然可以不执行 `add()`。
+本质上只是：
+
+> **模型生成了一份“调用意图”。**
+
+模型没有在你的 Node 进程里真正运行：
+
+```ts
+add(123, 456)
+```
+
+真正执行 Tool 的仍然必须是我们的应用程序。
+
+所以自然进入下一步：
+
+```text
+Tool 03
+模型告诉程序“想调用什么”
+↓
+Tool 04
+程序真正执行这个 Tool
+```
 
 ---
 
@@ -217,16 +269,24 @@ arguments = { a: 123, b: 456 }
 
 ### Tool 01
 
-- [ ] 我能用自己的话解释 Tool 是什么。
-- [ ] 我知道 Tool 最基础可以只是普通函数。
+- [ ] 我能解释 Tool 是一个可执行能力。
 - [ ] 我能解释 Input / Execute / Output。
 
 ### Tool 02
 
-- [ ] 我能解释 Tool Schema 是什么。
-- [ ] 我知道 Function 和 Schema 的职责不同。
+- [ ] 我能解释 Tool Schema。
+- [ ] 我知道 Function 和 Schema 职责不同。
 - [ ] 我能解释 `name / description / parameters / required`。
-- [ ] 我知道 Schema 只是描述，不负责执行。
-- [ ] 我知道当前还没有把 Schema 发给 LLM。
 
-做到这些，就进入 **tool:03 · Model Chooses Tool**。
+### Tool 03
+
+- [ ] 我知道 Tool Schema 是通过 `tools` 发给模型的。
+- [ ] 我能解释 `tool_choice: auto`。
+- [ ] 我能解释 `finish_reason: tool_calls`。
+- [ ] 我能找到 `message.tool_calls[]`。
+- [ ] 我能找到 `function.name`。
+- [ ] 我能解析 `function.arguments`。
+- [ ] 我知道 Tool Call 只是调用意图，不代表 Tool 已经执行。
+- [ ] 我实际对比过“需要 add”和“不需要 add”的两个问题。
+
+做到这些，就进入 **tool:04 · Execute Tool**。
