@@ -29,6 +29,7 @@
     "agent-loop:04": "node --env-file=.env --import tsx mvp/03-agent-loop/04-max-steps/index.ts",
     "agent-loop:05": "node --env-file=.env --import tsx mvp/03-agent-loop/05-loop-state/index.ts",
     "agent-loop:06": "node --env-file=.env --import tsx mvp/03-agent-loop/06-minimal-agent-runtime/index.ts",
+    "session:01": "node --env-file=.env --import tsx mvp/04-session/01-no-session/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
