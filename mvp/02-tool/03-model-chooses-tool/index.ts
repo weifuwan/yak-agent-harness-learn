@@ -7,15 +7,15 @@ type ToolCall = {
   }
 }
 
-const apiKey = process.env.KIMI_API_KEY?.trim()
-const baseUrl = (process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1").replace(/\/+$/, "")
-const model = process.env.KIMI_MODEL?.trim() || "kimi-k2.6"
+const apiKey = process.env.MODEL_API_KEY?.trim()
+const baseUrl = (process.env.MODEL_BASE_URL ?? "https://api.deepseek.com").replace(/\/+$/, "")
+const model = process.env.MODEL_NAME?.trim() || "deepseek-flash"
 const userPrompt =
   process.argv.slice(2).join(" ").trim() ||
   "请使用可用工具计算 123 + 456。"
 
 if (!apiKey) {
-  throw new Error("KIMI_API_KEY is required. Fill it in .env first.")
+  throw new Error("MODEL_API_KEY is required. Fill it in .env first.")
 }
 
 function add(a: number, b: number): number {
@@ -63,8 +63,9 @@ const requestBody = {
 }
 
 console.log("========== Tool 03 · Model Chooses Tool ==========")
-console.log(`model: ${model}`)
-console.log(`user : ${userPrompt}`)
+console.log(`provider: DeepSeek`)
+console.log(`model   : ${model}`)
+console.log(`user    : ${userPrompt}`)
 
 console.log("\n[Tools sent to model]")
 console.log(JSON.stringify(requestBody.tools, null, 2))
@@ -84,7 +85,7 @@ const response = await fetch(`${baseUrl}/chat/completions`, {
 
 const rawBody = await response.text()
 if (!response.ok) {
-  throw new Error(`Kimi HTTP ${response.status}: ${rawBody}`)
+  throw new Error(`DeepSeek HTTP ${response.status}: ${rawBody}`)
 }
 
 const payload = JSON.parse(rawBody) as {
@@ -100,7 +101,7 @@ const payload = JSON.parse(rawBody) as {
 
 const choice = payload.choices?.[0]
 if (!choice) {
-  throw new Error("Kimi returned no choices[0]")
+  throw new Error("DeepSeek returned no choices[0]")
 }
 
 console.log("\n[Model Decision]")
@@ -143,6 +144,6 @@ console.log(add.toString())
 console.log("\nadd() executed: NO")
 
 console.log("\n[关键观察]")
-console.log("Tool Schema 被发送给了模型。")
+console.log("Tool Schema 被发送给了 DeepSeek。")
 console.log("模型可以返回 tool_calls，表达：我想调用哪个 Tool，以及要传什么参数。")
 console.log("但模型并没有真的执行 add()；真正执行 Tool 是下一节 tool:04 的事情。")
