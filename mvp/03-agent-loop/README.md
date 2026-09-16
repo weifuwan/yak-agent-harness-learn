@@ -30,8 +30,8 @@
 01 Manual Two-Step       ✅
 02 Basic Loop            ✅
 03 Stop Condition        ✅
-04 Max Steps             ← 当前
-05 Loop State            ← 后续
+04 Max Steps             ✅
+05 Loop State            ← 当前
 06 Minimal Agent Runtime ← 后续
 ```
 
@@ -45,6 +45,7 @@
 MODEL_API_KEY=
 MODEL_BASE_URL=https://api.deepseek.com
 MODEL_NAME=deepseek-flash
+AGENT_MAX_STEPS=4
 ```
 
 ### Agent Loop 01 · Manual Two-Step
@@ -91,19 +92,11 @@ DONE     · final_answer
 
 ### Agent Loop 04 · Max Steps
 
-默认：
-
-```env
-AGENT_MAX_STEPS=4
-```
-
-运行：
-
 ```bash
 npm run agent-loop:04
 ```
 
-重点观察两种结果：
+重点观察：
 
 ```text
 status = done
@@ -117,13 +110,32 @@ status = stopped
 reason = max_steps
 ```
 
-想更容易看到保护性停止，可以把 `.env` 改成：
+详细说明：[`04-max-steps/README.md`](./04-max-steps/README.md)
 
-```env
-AGENT_MAX_STEPS=2
+### Agent Loop 05 · Loop State
+
+```bash
+npm run agent-loop:05
 ```
 
-详细说明：[`04-max-steps/README.md`](./04-max-steps/README.md)
+重点观察：
+
+```text
+[Loop State · initial]
+[Loop State · after tool]
+[Loop State · done]
+```
+
+看同一个 State 如何持续变化：
+
+```text
+step
+maxSteps
+messages
+result
+```
+
+详细说明：[`05-loop-state/README.md`](./05-loop-state/README.md)
 
 ---
 
@@ -143,6 +155,12 @@ Tool 执行次数  = 固定
 
 ```text
 LLM #1 → Tool → LLM #2 → STOP
+```
+
+所以：
+
+```text
+01 = Fixed Flow
 ```
 
 ---
@@ -166,10 +184,9 @@ while (true) {
 }
 ```
 
-可以记成：
+所以：
 
 ```text
-01 = Fixed Flow
 02 = Loop
 ```
 
@@ -179,22 +196,22 @@ while (true) {
 
 核心问题：**什么时候应该继续，什么时候才算真正完成？**
 
-把判断正式表达成：
+正式表达为：
 
 ```text
 CONTINUE · tool_call
 DONE     · final_answer
 ```
 
-主循环不再自己解释模型响应，而是通过：
+通过：
 
 ```ts
 decideNextStep(response.message)
 ```
 
-得到明确的 `LoopDecision`。
+把“解释模型响应”从主循环中分离。
 
-同时修正：
+同时明确：
 
 ```text
 没有 tool_calls
@@ -207,7 +224,7 @@ decideNextStep(response.message)
 ```text
 没有 tool_calls
 +
-有最终 assistant content
+有 final assistant content
 ```
 
 才是：
@@ -216,10 +233,9 @@ decideNextStep(response.message)
 DONE · final_answer
 ```
 
-可以记成：
+所以：
 
 ```text
-02 = Loop
 03 = Decision
 ```
 
@@ -229,108 +245,229 @@ DONE · final_answer
 
 核心问题：**如果模型一直 CONTINUE，Agent 怎么防止无限运行？**
 
-这一轮正式定义：
+正式定义：
 
 ```text
 maxSteps
 = 最多允许多少次 LLM 决策
 ```
 
-配置：
-
-```env
-AGENT_MAX_STEPS=4
-```
-
-循环现在不仅有模型自己的正常完成条件，也有 Runtime 的硬边界：
+正常结束：
 
 ```text
-模型给出 final_answer
+final_answer
 ↓
 status = done
-reason = final_answer
 ```
 
-或者：
+保护性停止：
 
 ```text
-模型仍然想继续
+step 到 maxSteps
 +
-step 已经到 maxSteps
+模型仍想继续
 ↓
 status = stopped
 reason = max_steps
 ```
 
-## 为什么要区分 done 和 stopped？
-
-因为：
+所以：
 
 ```text
-done
-= 任务正常完成
-
-stopped
-= Runtime 强制结束
+04 = Runtime Boundary
 ```
 
-它们不是一回事。
-
-## 最后一个 Step 还想调用 Tool 怎么办？
-
-这一节选择：
+模型决定：
 
 ```text
-不再执行新的 Tool
-↓
-直接 max_steps
+我还想不想继续？
 ```
 
-因为已经没有下一次 LLM 决策机会，不应该再额外执行一个可能有副作用的 Action。
-
-所以可以记成：
+Runtime 决定：
 
 ```text
-03
-模型什么时候正常结束？
-↓
-final_answer
-
-04
-模型一直不结束怎么办？
-↓
-max_steps
+你最多能继续多久？
 ```
-
-或者更短：
-
-> **03 是模型退出条件，04 是 Runtime 运行边界。**
 
 ---
 
-## 下一步为什么是 Loop State？
+# Agent Loop 05 · Loop State
 
-现在循环里已经有越来越多运行数据：
+核心问题：**Agent 运行过程中，step / messages / maxSteps / result 应该统一放在哪里？**
+
+`04` 里这些数据还是散落的：
 
 ```text
-messages
 step
 maxSteps
-decision
+messages
 result
 ```
 
-目前它们仍然散落在主流程的局部变量里。
+`05` 第一次定义：
+
+```ts
+type LoopState = {
+  step: number
+  maxSteps: number
+  messages: Array<Record<string, unknown>>
+  result?: AgentRunResult
+}
+```
+
+结构变成：
+
+```text
+LoopState
+├── step
+├── maxSteps
+├── messages
+└── result
+```
+
+## Runtime Logic vs Runtime State
+
+这一节最重要的边界：
+
+```text
+Runtime Logic
+= 下一步做什么
+```
+
+例如：
+
+```text
+call LLM
+decideNextStep
+execute Tool
+检查 maxSteps
+```
+
+而：
+
+```text
+Runtime State
+= 当前已经发生了什么
+```
+
+例如：
+
+```text
+state.step
+state.maxSteps
+state.messages
+state.result
+```
+
+可以记成：
+
+> **Logic 决定下一步；State 记录当前状态。**
+
+## 行为没有变化
+
+这一轮没有增加新的 Agent 能力。
+
+`04`：
+
+```ts
+step += 1
+messages.push(...)
+result = ...
+```
+
+`05`：
+
+```ts
+state.step += 1
+state.messages.push(...)
+state.result = ...
+```
+
+仍然是同一条运行链：
+
+```text
+LLM
+↓
+Decision
+↓
+Tool
+↓
+Observation
+↓
+LLM
+```
+
+变化只是：
+
+```text
+散落的运行变量
+↓
+一个明确的 LoopState
+```
+
+所以：
+
+```text
+05 = Runtime State
+```
+
+详细实现：
+
+```text
+05-loop-state/
+├── state.ts
+├── index.ts
+└── README.md
+```
+
+---
+
+## 下一步为什么是 Minimal Agent Runtime？
+
+现在已经分别拥有：
+
+```text
+Tool abstraction
+Loop
+Decision
+maxSteps
+LoopState
+```
+
+但主程序仍然自己负责：
+
+```text
+创建 State
+调用 LLM
+进入循环
+执行 Tool
+更新 State
+生成 Result
+```
 
 下一轮进入：
 
 ```text
-agent-loop:05 · Loop State
+agent-loop:06 · Minimal Agent Runtime
 ```
 
-解决：
+把这一整段运行过程第一次收成类似：
 
-> **Agent 运行过程中这些状态应该怎么统一表示？**
+```ts
+const result = await runAgent({
+  prompt,
+  tools,
+  maxSteps,
+})
+```
+
+也就是：
+
+```text
+04 = Runtime Boundary
+05 = Runtime State
+06 = Runtime Encapsulation
+```
 
 ---
 
@@ -348,17 +485,21 @@ agent-loop:05 · Loop State
 ### Agent Loop 03
 
 - [ ] 我能解释 `CONTINUE / DONE`。
-- [ ] 我能解释 `final_answer`。
-- [ ] 我知道“没有 tool_calls”本身不等于完成。
+- [ ] 我知道 `final_answer` 是正常停止条件。
 
 ### Agent Loop 04
 
-- [ ] 我知道为什么 Agent 不能只依赖模型自己停止。
 - [ ] 我能解释 `maxSteps`。
-- [ ] 我知道这里一个 Step 指一次 LLM 决策。
 - [ ] 我能区分 `final_answer / max_steps`。
-- [ ] 我能区分 `done / stopped`。
-- [ ] 我理解为什么最后一个 Step 仍要 Tool 时不再执行新 Tool。
-- [ ] 我实际调小过 `AGENT_MAX_STEPS` 并观察 `max_steps`。
+- [ ] 我知道 Runtime 必须有自己的硬边界。
 
-做到这些，就进入 **agent-loop:05 · Loop State**。
+### Agent Loop 05
+
+- [ ] 我能解释 `LoopState`。
+- [ ] 我知道为什么 `step / maxSteps / messages / result` 属于 State。
+- [ ] 我能区分 Runtime Logic 和 Runtime State。
+- [ ] 我能看懂同一个 State 如何跨多轮持续更新。
+- [ ] 我知道这一轮没有增加新的 Agent 行为。
+- [ ] 我知道为什么下一步可以开始封装 `runAgent()`。
+
+做到这些，就进入 **agent-loop:06 · Minimal Agent Runtime**。
