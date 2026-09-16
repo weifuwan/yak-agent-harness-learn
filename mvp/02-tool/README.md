@@ -83,6 +83,42 @@ Final Assistant
 
 详细说明：[`05-tool-result-to-model/README.md`](./05-tool-result-to-model/README.md)
 
+### Tool 06 · Multiple Tools
+
+这次一次提供 3 个 Tool：
+
+```text
+add
+get_current_time
+read_file
+```
+
+分别测试：
+
+```bash
+npm run tool:06 -- "请使用工具计算 123 + 456"
+```
+
+```bash
+npm run tool:06 -- "请使用工具告诉我当前服务器时间"
+```
+
+```bash
+npm run tool:06 -- "请读取 package.json，并告诉我项目名称"
+```
+
+重点看：
+
+```text
+function.name
+↓
+Application 根据 name 分发
+↓
+执行不同 Tool
+```
+
+详细说明：[`06-multiple-tools/README.md`](./06-multiple-tools/README.md)
+
 ---
 
 ## 学习路线
@@ -110,8 +146,8 @@ Final Assistant
 02 Tool Schema            ✅
 03 Model Chooses Tool     ✅
 04 Execute Tool           ✅
-05 Tool Result → Model    ← 当前
-06 Multiple Tools         ← 后续
+05 Tool Result → Model    ✅
+06 Multiple Tools         ← 当前
 07 Unified Tool Interface ← 后续
 ```
 
@@ -206,13 +242,6 @@ Tool Result
 STOP
 ```
 
-这一节结束时：
-
-```text
-程序知道结果
-模型还不知道结果
-```
-
 详细说明：[`04-execute-tool/README.md`](./04-execute-tool/README.md)
 
 ---
@@ -241,27 +270,7 @@ role = tool
 Final Assistant
 ```
 
-第一次请求的 messages：
-
-```text
-system
-user
-```
-
-模型返回 Tool Call 后，应用把它加入历史，再加入 Tool Result：
-
-```text
-system
-user
-assistant(tool_calls)
-tool(tool_call_id + content)
-```
-
-第二次请求就能看到完整发生过程。
-
-## role = tool
-
-Tool Result 会作为一条新的消息：
+Tool Result 会作为一条新消息：
 
 ```json
 {
@@ -281,66 +290,159 @@ content
 = Tool 真正执行出来的结果
 ```
 
-所以：
-
-```text
-Tool Result
-579
-
-≠
-
-Final Assistant
-123 + 456 = 579。
-```
-
-Tool 负责执行，LLM 负责继续理解和组织回答。
-
-当前代码第二次请求使用：
-
-```text
-tool_choice = none
-```
-
-因为这一节只学习固定的一次闭环，不允许模型继续产生新的 Tool Call。
+当前仍然是固定闭环，不是 Agent Loop。
 
 详细说明：[`05-tool-result-to-model/README.md`](./05-tool-result-to-model/README.md)
 
 ---
 
-## 为什么 05 还不是 Agent Loop？
+# Tool 06 · Multiple Tools
 
-当前流程是写死的：
+核心问题：**当 Tool 从 1 个变成多个，Application 怎么管理？**
+
+这一节提供：
 
 ```text
-LLM
+add
+get_current_time
+read_file
+```
+
+模型会先根据 User Prompt 选择 Tool：
+
+```text
+User
 ↓
-最多一次 Tool Call
+DeepSeek
+↓
+function.name = ?
+```
+
+Application 当前直接用：
+
+```ts
+if (name === "add") {
+  ...
+}
+
+if (name === "get_current_time") {
+  ...
+}
+
+if (name === "read_file") {
+  ...
+}
+```
+
+完整流程：
+
+```text
+User
+↓
+DeepSeek
+↓
+从多个 Tools 中选择
+↓
+Tool Call
+↓
+Application
+↓
+if / else 分发
+↓
+执行对应 Tool
 ↓
 Tool Result
 ↓
-LLM
+role = tool
 ↓
-结束
+DeepSeek
+↓
+Final Assistant
 ```
 
-它还不会：
+## Multiple Tools ≠ Multiple Tool Calls
+
+这一节的 Multiple Tools 指的是：
 
 ```text
-LLM
+模型有多个 Tool 可以选
+```
+
+不是：
+
+```text
+一次响应同时执行多个 Tool Call
+```
+
+为了保持学习边界，当前代码一次运行只接受一个 Tool Call。
+
+## 为什么这一节故意保留 if / else？
+
+因为现在开始真正看到：
+
+```text
+Tool 越多
 ↓
-Tool
+Schema 越多
 ↓
-LLM
+参数解析越多
 ↓
-Tool
+参数校验越多
 ↓
-LLM
+执行分支越多
+↓
+管理开始变乱
+```
+
+如果继续增加：
+
+```text
+write_file
+list_files
+search
+run_command
 ...
 ```
 
-什么时候继续、什么时候停，目前都不是一个自动循环。
+代码会越来越难维护。
 
-所以 Agent Loop 还没有出现。
+所以这一节不是为了“多写几个 Tool”，而是为了让管理问题真实出现。
+
+详细说明：[`06-multiple-tools/README.md`](./06-multiple-tools/README.md)
+
+---
+
+## 下一步为什么是 Unified Tool Interface？
+
+现在已经真实出现：
+
+```text
+Tool Schema 分散
+参数校验分散
+执行函数分散
+if / else 分发增长
+```
+
+所以下一步才有理由把它们收敛成类似：
+
+```text
+Tool
+├── name
+├── description / schema
+└── execute()
+```
+
+然后通过 Registry 按名字找到 Tool。
+
+也就是：
+
+```text
+Tool 06
+先看到管理问题
+↓
+Tool 07
+再解决管理问题
+```
 
 ---
 
@@ -368,13 +470,18 @@ LLM
 
 ### Tool 05
 
-- [ ] 我知道为什么 Tool Result 要再次交给模型。
-- [ ] 我能解释 `role = tool`。
-- [ ] 我能解释 `tool_call_id`。
-- [ ] 我知道 Assistant Tool Call Message 也要放回 messages。
-- [ ] 我能看懂第二次请求的完整消息历史。
-- [ ] 我能区分 Tool Result 和 Final Assistant。
-- [ ] 我知道一个用户请求为什么会产生两次 LLM 请求。
-- [ ] 我知道当前只是一次固定闭环，还不是 Agent Loop。
+- [ ] 我知道 Tool Result 为什么要再次交给模型。
+- [ ] 我能解释 `role = tool / tool_call_id`。
+- [ ] 我知道一个用户请求为什么会有两次 LLM 请求。
 
-做到这些，就进入 **tool:06 · Multiple Tools**。
+### Tool 06
+
+- [ ] 我知道 Multiple Tools 表示模型有多个 Tool 可以选择。
+- [ ] 我实际测试过 `add / get_current_time / read_file`。
+- [ ] 我知道 Application 根据 `function.name` 分发执行。
+- [ ] 我能看懂当前 `if / else` 分发逻辑。
+- [ ] 我能区分 Multiple Tools 和 Multiple Tool Calls。
+- [ ] 我知道当前一次运行仍然只接受一个 Tool Call。
+- [ ] 我能解释 Tool 增加以后为什么需要统一管理。
+
+做到这些，就进入 **tool:07 · Unified Tool Interface**。
