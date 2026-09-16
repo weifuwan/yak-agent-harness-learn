@@ -57,6 +57,12 @@ npm run llm:06 -- "请用三句话解释 Java HashMap"
 npm run llm:07 -- "请用三句话解释 Java HashMap"
 ```
 
+### 08 · Unified Stream Events
+
+```bash
+npm run llm:08 -- "请用一小段话解释 Java HashMap，控制在 120 字以内"
+```
+
 DeepSeek 使用：
 
 ```env
@@ -73,9 +79,7 @@ ANTHROPIC_BASE_URL=https://api.anthropic.com
 ANTHROPIC_MODEL=claude-sonnet-5
 ```
 
-没有 `ANTHROPIC_API_KEY` 时，会只运行 DeepSeek。
-
-独立说明：[`07-unified-llm-interface/README.md`](./07-unified-llm-interface/README.md)
+没有 `ANTHROPIC_API_KEY` 时，06～08 的 Anthropic 部分会自动跳过。
 
 ---
 
@@ -108,8 +112,8 @@ ANTHROPIC_MODEL=claude-sonnet-5
 04 Streaming              ✅
 05 Token / Context Window ✅
 06 Provider Differences   ✅
-07 Unified LLM Interface  ← 当前
-08                       ← 暂时不展开
+07 Unified LLM Interface  ✅
+08 Unified Stream Events  ← 当前
 ```
 
 ---
@@ -266,16 +270,7 @@ npm run llm:06 -- "请用三句话解释 Java HashMap"
 
 核心问题：**怎么让上层业务代码不再关心 DeepSeek / Anthropic 的协议差异？**
 
-06 已经出现真实重复：
-
-```text
-DeepSeek URL / Body / Response / Usage
-Anthropic URL / Body / Response / Usage
-```
-
-所以 07 才开始第一次抽象。
-
-## 统一输入
+统一输入：
 
 ```ts
 LLMRequest = {
@@ -284,7 +279,7 @@ LLMRequest = {
 }
 ```
 
-## 统一输出
+统一输出：
 
 ```ts
 LLMResponse = {
@@ -297,7 +292,7 @@ LLMResponse = {
 }
 ```
 
-## 统一 Provider 接口
+统一 Provider 接口：
 
 ```ts
 interface Provider {
@@ -318,23 +313,7 @@ provider.chat(request)
 LLMResponse
 ```
 
-具体协议被留在：
-
-```text
-DeepSeekProvider
-AnthropicProvider
-```
-
-内部。
-
-最重要的实验是：
-
-```ts
-await runProvider(deepSeek, request)
-await runProvider(anthropic, request)
-```
-
-换了 Provider，但 `runProvider()` 不需要改。
+换 Provider 后，consumer 不需要修改。
 
 运行：
 
@@ -342,10 +321,89 @@ await runProvider(anthropic, request)
 npm run llm:07 -- "请用三句话解释 Java HashMap"
 ```
 
+详细说明：[`07-unified-llm-interface/README.md`](./07-unified-llm-interface/README.md)
+
+---
+
+# 08 · Unified Stream Events
+
+核心问题：**07 已经隐藏了完整 Response 的差异，Streaming 过程中不同 Provider 的事件差异怎么办？**
+
+DeepSeek 流式协议里会看到：
+
+```text
+choices[0].delta.content
+...
+data: [DONE]
+```
+
+Anthropic 流式协议里会看到：
+
+```text
+message_start
+content_block_delta + text_delta
+message_stop
+```
+
+如果 consumer 直接处理这些原始协议，就又会被 Provider 差异污染。
+
+所以 08 定义最小统一事件：
+
+```ts
+type LLMEvent =
+  | { type: "start"; provider: string; model: string }
+  | { type: "text-delta"; text: string }
+  | { type: "finish" }
+```
+
+Provider 对外统一成：
+
+```ts
+stream(request: LLMRequest): AsyncIterable<LLMEvent>
+```
+
+consumer 只需要：
+
+```ts
+for await (const event of provider.stream(request)) {
+  // 只处理 start / text-delta / finish
+}
+```
+
+结构变成：
+
+```text
+DeepSeek raw stream
+        ↓
+DeepSeekProvider
+        ↓
+      LLMEvent
+        ↑
+AnthropicProvider
+        ↑
+Anthropic raw stream
+```
+
+所以：
+
+```text
+07
+隐藏 Provider 的“最终结果差异”
+
+08
+隐藏 Provider 的“流式过程差异”
+```
+
+运行：
+
+```bash
+npm run llm:08 -- "请用一小段话解释 Java HashMap，控制在 120 字以内"
+```
+
 代码：
 
 ```text
-07-unified-llm-interface/
+08-unified-stream-events/
 ├── types.ts
 ├── deepseek-provider.ts
 ├── anthropic-provider.ts
@@ -353,31 +411,26 @@ npm run llm:07 -- "请用三句话解释 Java HashMap"
 └── README.md
 ```
 
-详细说明：[`07-unified-llm-interface/README.md`](./07-unified-llm-interface/README.md)
+详细说明：[`08-unified-stream-events/README.md`](./08-unified-stream-events/README.md)
 
-这一阶段先记住：
-
-> **抽象不是提前设计出来的，而是从已经出现的重复和变化点里提取出来的。**
-
-以及：
+这一阶段先只统一文字流：
 
 ```text
-LLM 能力
-= 上层稳定需求
-
-Provider 协议
-= 底层可替换实现
+start
+text-delta
+finish
 ```
 
-当前只统一非流式调用：
+暂时不要继续增加：
 
 ```text
-完整 Request
-↓
-完整 Response
+Reasoning Event ❌
+Tool Call Event ❌
+Usage Event     ❌
+Error Event     ❌
+Abort           ❌
+Retry           ❌
 ```
-
-Streaming 事件还没有统一，留给 `08`。
 
 ---
 
@@ -417,11 +470,17 @@ Streaming 事件还没有统一，留给 `08`。
 
 ### 07 Unified LLM Interface
 
-- [ ] 我能解释为什么现在才需要 Provider 接口。
 - [ ] 我能解释 `LLMRequest / LLMResponse`。
-- [ ] 我能解释 `Provider.chat()`。
-- [ ] 我知道 Provider-specific 协议放在哪里。
 - [ ] 我能解释为什么换 Provider 后 consumer 不需要修改。
-- [ ] 我知道当前还没有统一 Streaming。
+- [ ] 我知道 07 只统一了完整请求 / 完整响应。
 
-等 07 真正理解以后，再进入 **08 · Unified Stream Events**。
+### 08 Unified Stream Events
+
+- [ ] 我知道 DeepSeek / Anthropic 的原始 Streaming 协议不同。
+- [ ] 我能解释 `start / text-delta / finish`。
+- [ ] 我能解释 `AsyncIterable<LLMEvent>`。
+- [ ] 我能看懂 `for await...of` 如何消费事件。
+- [ ] 我知道 Provider 负责把原始 Stream 翻译成统一 LLMEvent。
+- [ ] 我能解释为什么换 Provider 后 stream consumer 也不需要修改。
+
+等 08 真正理解以后，`01-LLM` 这一轮基础学习就可以先封板。
