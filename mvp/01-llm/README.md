@@ -51,7 +51,13 @@ npm run llm:05 -- "Java HashMap"
 npm run llm:06 -- "请用三句话解释 Java HashMap"
 ```
 
-DeepSeek 使用前面已有的：
+### 07 · Unified LLM Interface
+
+```bash
+npm run llm:07 -- "请用三句话解释 Java HashMap"
+```
+
+DeepSeek 使用：
 
 ```env
 MODEL_API_KEY=
@@ -59,7 +65,7 @@ MODEL_BASE_URL=https://api.deepseek.com
 MODEL_NAME=deepseek-flash
 ```
 
-Anthropic 是可选的：
+Anthropic 可选：
 
 ```env
 ANTHROPIC_API_KEY=
@@ -67,9 +73,9 @@ ANTHROPIC_BASE_URL=https://api.anthropic.com
 ANTHROPIC_MODEL=claude-sonnet-5
 ```
 
-不配置 `ANTHROPIC_API_KEY` 时，Anthropic 部分会自动跳过。
+没有 `ANTHROPIC_API_KEY` 时，会只运行 DeepSeek。
 
-独立说明：[`06-provider-differences/README.md`](./06-provider-differences/README.md)
+独立说明：[`07-unified-llm-interface/README.md`](./07-unified-llm-interface/README.md)
 
 ---
 
@@ -101,8 +107,9 @@ ANTHROPIC_MODEL=claude-sonnet-5
 03 Multi-turn Messages    ✅
 04 Streaming              ✅
 05 Token / Context Window ✅
-06 Provider Differences   ← 当前
-07～08                    ← 暂时不展开
+06 Provider Differences   ✅
+07 Unified LLM Interface  ← 当前
+08                       ← 暂时不展开
 ```
 
 ---
@@ -218,37 +225,16 @@ npm run llm:05 -- "Java HashMap"
 
 核心问题：**同样都是调用 LLM，换一个 Provider 后，底层协议还一样吗？**
 
-先认识：
-
 ```text
 Provider = 谁提供模型服务
 Model    = 具体调用哪个模型
 API      = 通过什么协议调用
 ```
 
-这一节用相同 Prompt 对比：
-
-```text
-DeepSeek
-vs
-Anthropic
-```
-
-重点看：
-
-```text
-Endpoint
-Headers
-Request Body
-Assistant 取值路径
-Usage 字段
-```
-
-例如：
+这一节故意把 DeepSeek / Anthropic 两套调用并排写出来：
 
 ```text
                 DeepSeek                    Anthropic
-
 Endpoint        /chat/completions           /v1/messages
 System          messages role=system        body.system
 Assistant       choices[0].message.content  content[].text
@@ -256,9 +242,7 @@ Input usage     prompt_tokens               input_tokens
 Output usage    completion_tokens           output_tokens
 ```
 
-当前故意保留两套调用代码，不做统一抽象。
-
-因为现在只需要看到：
+目标不是解决差异，而是先看见：
 
 ```text
 业务能力相同
@@ -274,21 +258,126 @@ Provider 协议不同
 npm run llm:06 -- "请用三句话解释 Java HashMap"
 ```
 
-代码：[`06-provider-differences/index.ts`](./06-provider-differences/index.ts)
-
 详细说明：[`06-provider-differences/README.md`](./06-provider-differences/README.md)
 
-暂时不要引入：
+---
+
+# 07 · Unified LLM Interface
+
+核心问题：**怎么让上层业务代码不再关心 DeepSeek / Anthropic 的协议差异？**
+
+06 已经出现真实重复：
 
 ```text
-Provider interface ❌
-Adapter            ❌
-Factory            ❌
-Provider Registry  ❌
-Unified LLMEvent   ❌
+DeepSeek URL / Body / Response / Usage
+Anthropic URL / Body / Response / Usage
 ```
 
-这些问题留到下一节。
+所以 07 才开始第一次抽象。
+
+## 统一输入
+
+```ts
+LLMRequest = {
+  system?: string
+  messages: ChatMessage[]
+}
+```
+
+## 统一输出
+
+```ts
+LLMResponse = {
+  content: string
+  usage: {
+    inputTokens?: number
+    outputTokens?: number
+    totalTokens?: number
+  }
+}
+```
+
+## 统一 Provider 接口
+
+```ts
+interface Provider {
+  name: string
+  model: string
+
+  chat(request: LLMRequest): Promise<LLMResponse>
+}
+```
+
+于是 consumer 只需要：
+
+```text
+Provider
+↓
+provider.chat(request)
+↓
+LLMResponse
+```
+
+具体协议被留在：
+
+```text
+DeepSeekProvider
+AnthropicProvider
+```
+
+内部。
+
+最重要的实验是：
+
+```ts
+await runProvider(deepSeek, request)
+await runProvider(anthropic, request)
+```
+
+换了 Provider，但 `runProvider()` 不需要改。
+
+运行：
+
+```bash
+npm run llm:07 -- "请用三句话解释 Java HashMap"
+```
+
+代码：
+
+```text
+07-unified-llm-interface/
+├── types.ts
+├── deepseek-provider.ts
+├── anthropic-provider.ts
+├── index.ts
+└── README.md
+```
+
+详细说明：[`07-unified-llm-interface/README.md`](./07-unified-llm-interface/README.md)
+
+这一阶段先记住：
+
+> **抽象不是提前设计出来的，而是从已经出现的重复和变化点里提取出来的。**
+
+以及：
+
+```text
+LLM 能力
+= 上层稳定需求
+
+Provider 协议
+= 底层可替换实现
+```
+
+当前只统一非流式调用：
+
+```text
+完整 Request
+↓
+完整 Response
+```
+
+Streaming 事件还没有统一，留给 `08`。
 
 ---
 
@@ -323,8 +412,16 @@ Unified LLMEvent   ❌
 ### 06 Provider Differences
 
 - [ ] 我能解释 Provider 和 Model 的区别。
-- [ ] 我知道不同 Provider 的 Endpoint / Body / Response 可能不同。
 - [ ] 我能说出 DeepSeek 和 Anthropic 至少 3 个协议差异。
-- [ ] 我理解为什么这一阶段故意不做统一接口。
+- [ ] 我理解为什么 06 故意不做抽象。
 
-等 06 真正理解以后，再进入 **07 · Unified LLM Interface**。
+### 07 Unified LLM Interface
+
+- [ ] 我能解释为什么现在才需要 Provider 接口。
+- [ ] 我能解释 `LLMRequest / LLMResponse`。
+- [ ] 我能解释 `Provider.chat()`。
+- [ ] 我知道 Provider-specific 协议放在哪里。
+- [ ] 我能解释为什么换 Provider 后 consumer 不需要修改。
+- [ ] 我知道当前还没有统一 Streaming。
+
+等 07 真正理解以后，再进入 **08 · Unified Stream Events**。
