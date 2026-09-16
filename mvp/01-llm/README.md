@@ -45,22 +45,31 @@ npm run llm:04 -- "请详细解释 Java HashMap 的工作原理"
 npm run llm:05 -- "Java HashMap"
 ```
 
-也可以换一个主题：
+### 06 · Provider Differences
 
 ```bash
-npm run llm:05 -- "Java ThreadLocal"
+npm run llm:06 -- "请用三句话解释 Java HashMap"
 ```
 
-这一步会连续做 3 轮对话，并打印：
+DeepSeek 使用前面已有的：
 
-```text
-messages
-prompt_tokens
-completion_tokens
-total_tokens
+```env
+MODEL_API_KEY=
+MODEL_BASE_URL=https://api.deepseek.com
+MODEL_NAME=deepseek-flash
 ```
 
-独立说明：[`05-token-context/README.md`](./05-token-context/README.md)
+Anthropic 是可选的：
+
+```env
+ANTHROPIC_API_KEY=
+ANTHROPIC_BASE_URL=https://api.anthropic.com
+ANTHROPIC_MODEL=claude-sonnet-5
+```
+
+不配置 `ANTHROPIC_API_KEY` 时，Anthropic 部分会自动跳过。
+
+独立说明：[`06-provider-differences/README.md`](./06-provider-differences/README.md)
 
 ---
 
@@ -91,8 +100,9 @@ total_tokens
 02 Message Roles          ✅
 03 Multi-turn Messages    ✅
 04 Streaming              ✅
-05 Token / Context Window ← 当前
-06～08                    ← 暂时不展开
+05 Token / Context Window ✅
+06 Provider Differences   ← 当前
+07～08                    ← 暂时不展开
 ```
 
 ---
@@ -103,22 +113,14 @@ total_tokens
 
 ```text
 User Prompt
-    ↓
+↓
 HTTP Request
-    ↓
+↓
 Model
-    ↓
+↓
 HTTP Response
-    ↓
+↓
 Assistant Text
-```
-
-这一阶段认识：
-
-```text
-model
-messages
-payload.choices[0].message.content
 ```
 
 运行：
@@ -139,16 +141,6 @@ user      = 用户说的话
 assistant = 模型说的话
 ```
 
-同时区分：
-
-```text
-system / user / assistant
-= message role
-
-Java 工程师 / 初学者老师 / 面试官
-= System Prompt 定义的 persona
-```
-
 运行：
 
 ```bash
@@ -160,22 +152,6 @@ npm run llm:02 -- "解释一下 HashMap"
 # 03 · Multi-turn Messages
 
 核心问题：**模型为什么看起来能记住上一轮？**
-
-因为下一轮请求把历史重新发了一遍：
-
-```text
-第一轮
-system + user1
-↓
-assistant1
-
-第二轮
-system + user1 + assistant1 + user2
-↓
-assistant2
-```
-
-所以：
 
 > **Multi-turn 最基础的实现，就是应用保存 History，并在下一轮重新发送。**
 
@@ -194,23 +170,8 @@ npm run llm:03 -- "我叫什么？"
 核心问题：**模型回答比较慢时，能不能生成一点，就先返回一点？**
 
 ```text
-stream:false
-→ 等完整回答
-→ message.content
-
-stream:true
-→ delta 1
-→ delta 2
-→ delta 3
-→ ...
-→ 自己拼成完整 Assistant
-```
-
-最重要的区别：
-
-```text
-非流式：choices[0].message.content
-流式：  choices[0].delta.content
+stream:false → message.content
+stream:true  → delta.content → 拼成完整 Assistant
 ```
 
 运行：
@@ -225,81 +186,23 @@ npm run llm:04 -- "请详细解释 Java HashMap 的工作原理"
 
 # 05 · Token / Context Window
 
-核心问题：**多轮对话的 History 可以一直无限增长吗？**
-
-不能。
-
-这一阶段认识两个新词。
-
-## Token
-
-先理解成：
-
-> **模型真正用来读取和生成文本的基本单位。**
-
-不要把 Token 简单等同于字符或单词：
+核心问题：**Multi-turn History 可以一直无限增长吗？**
 
 ```text
-字符数 ≠ Token 数
-单词数 ≠ Token 数
+Token
+= 模型读取和生成文本的基本单位
+
+Context Window
+= 一次请求能够处理的上下文容量
 ```
-
-这一步直接观察 Provider 返回的 `usage`：
-
-```text
-prompt_tokens
-completion_tokens
-total_tokens
-```
-
-## Context Window
-
-先理解成：
-
-> **模型一次请求能够处理的上下文容量是有限的。**
-
-上下文里会逐渐塞入：
-
-```text
-System Prompt
-+
-User 1
-+
-Assistant 1
-+
-User 2
-+
-Assistant 2
-+
-User 3
-+
-...
-```
-
-于是从 03 的 Multi-turn 会自然走到：
 
 ```text
 History 变长
 ↓
-输入 Token 增加
+prompt_tokens 增加
 ↓
 逐渐逼近 Context Window
 ```
-
-`llm:05` 会做 3 轮连续对话：
-
-```text
-Round 1
-system + user1
-
-Round 2
-system + user1 + assistant1 + user2
-
-Round 3
-system + user1 + assistant1 + user2 + assistant2 + user3
-```
-
-每一轮都打印真实 `usage`，最后用表格对比。
 
 运行：
 
@@ -307,31 +210,85 @@ system + user1 + assistant1 + user2 + assistant2 + user3
 npm run llm:05 -- "Java HashMap"
 ```
 
-代码：[`05-token-context/index.ts`](./05-token-context/index.ts)
+独立说明：[`05-token-context/README.md`](./05-token-context/README.md)
 
-详细说明：[`05-token-context/README.md`](./05-token-context/README.md)
+---
 
-这一阶段只需要看见问题：
+# 06 · Provider Differences
 
-```text
-Multi-turn
-↓
-History 越来越长
-↓
-prompt_tokens 通常越来越多
-↓
-Context Window 有上限
-```
+核心问题：**同样都是调用 LLM，换一个 Provider 后，底层协议还一样吗？**
 
-暂时不要解决：
+先认识：
 
 ```text
-History 截断         ❌
-Summary              ❌
-Compaction           ❌
-Token Budget Manager ❌
-Context Manager      ❌
+Provider = 谁提供模型服务
+Model    = 具体调用哪个模型
+API      = 通过什么协议调用
 ```
+
+这一节用相同 Prompt 对比：
+
+```text
+DeepSeek
+vs
+Anthropic
+```
+
+重点看：
+
+```text
+Endpoint
+Headers
+Request Body
+Assistant 取值路径
+Usage 字段
+```
+
+例如：
+
+```text
+                DeepSeek                    Anthropic
+
+Endpoint        /chat/completions           /v1/messages
+System          messages role=system        body.system
+Assistant       choices[0].message.content  content[].text
+Input usage     prompt_tokens               input_tokens
+Output usage    completion_tokens           output_tokens
+```
+
+当前故意保留两套调用代码，不做统一抽象。
+
+因为现在只需要看到：
+
+```text
+业务能力相同
+↓
+Provider 协议不同
+↓
+重复和差异开始出现
+```
+
+运行：
+
+```bash
+npm run llm:06 -- "请用三句话解释 Java HashMap"
+```
+
+代码：[`06-provider-differences/index.ts`](./06-provider-differences/index.ts)
+
+详细说明：[`06-provider-differences/README.md`](./06-provider-differences/README.md)
+
+暂时不要引入：
+
+```text
+Provider interface ❌
+Adapter            ❌
+Factory            ❌
+Provider Registry  ❌
+Unified LLMEvent   ❌
+```
+
+这些问题留到下一节。
 
 ---
 
@@ -341,7 +298,6 @@ Context Manager      ❌
 
 - [ ] 我能解释一次请求发送了什么。
 - [ ] 我知道 Assistant Text 从哪里取出来。
-- [ ] 我知道这还不是 Agent。
 
 ### 02 Message Roles
 
@@ -351,20 +307,24 @@ Context Manager      ❌
 ### 03 Multi-turn Messages
 
 - [ ] 我知道每一轮仍然是一次新的模型请求。
-- [ ] 我能解释为什么要重新发送 `user + assistant` History。
+- [ ] 我能解释为什么要重新发送 History。
 
 ### 04 Streaming
 
 - [ ] 我能解释 `stream:false / stream:true`。
 - [ ] 我知道 `message.content / delta.content` 的区别。
-- [ ] 我知道完整 Assistant 是多个 delta 拼起来的。
 
 ### 05 Token / Context Window
 
 - [ ] 我能用自己的话解释 Token。
-- [ ] 我能解释 `prompt_tokens / completion_tokens / total_tokens`。
-- [ ] 我能用自己的话解释 Context Window。
-- [ ] 我实际观察过 History 增长后 `prompt_tokens` 的变化。
-- [ ] 我知道 Context Window 有上限，History 不能无限增长。
+- [ ] 我能解释 Context Window。
+- [ ] 我观察过 History 增长后 `prompt_tokens` 的变化。
 
-等 05 真正理解以后，再进入 **06 · Provider Differences**。
+### 06 Provider Differences
+
+- [ ] 我能解释 Provider 和 Model 的区别。
+- [ ] 我知道不同 Provider 的 Endpoint / Body / Response 可能不同。
+- [ ] 我能说出 DeepSeek 和 Anthropic 至少 3 个协议差异。
+- [ ] 我理解为什么这一阶段故意不做统一接口。
+
+等 06 真正理解以后，再进入 **07 · Unified LLM Interface**。
