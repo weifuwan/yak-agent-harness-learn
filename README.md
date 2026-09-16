@@ -277,16 +277,16 @@ mvp/xx-name/
 ## 当前进度
 
 ```text
-[ ] 01 LLM
-[ ] 02 Tool
-[ ] 03 Agent Loop
-[ ] 04 Session
+[x] 01 LLM
+[x] 02 Tool
+[x] 03 Agent Loop
+[ ] 04 Session        ← next
 [ ] 05 Context
 [ ] 06 Compaction
 [ ] 07 Permission
 [ ] 08 Recovery
 ```
 
-当前从 **01 · LLM MVP** 开始。
+当前进入 **04 · Session MVP**。
 
 > 不是为了更快写出 Agent，而是为了真正知道 Agent 为什么这样工作。
