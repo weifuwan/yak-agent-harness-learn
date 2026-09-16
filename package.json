@@ -11,6 +11,7 @@
     "llm:01": "node --env-file=.env --import tsx mvp/01-llm/01-basic-call/index.ts",
     "llm:02": "node --env-file=.env --import tsx mvp/01-llm/02-message-roles/index.ts",
     "llm:03": "node --env-file=.env --import tsx mvp/01-llm/03-multi-turn/index.ts",
+    "llm:03:web": "node --env-file=.env --import tsx mvp/01-llm/03-multi-turn/server.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
@@ -21,7 +22,11 @@
     "mvp:permission": "tsx mvp/07-permission/src/index.ts",
     "mvp:recovery": "tsx mvp/08-recovery/src/index.ts"
   },
+  "dependencies": {
+    "markdown-it": "^14.1.0"
+  },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
