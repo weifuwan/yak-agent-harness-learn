@@ -29,8 +29,8 @@
 ```text
 01 Manual Two-Step       ✅
 02 Basic Loop            ✅
-03 Stop Condition        ← 当前
-04 Max Steps             ← 后续
+03 Stop Condition        ✅
+04 Max Steps             ← 当前
 05 Loop State            ← 后续
 06 Minimal Agent Runtime ← 后续
 ```
@@ -54,13 +54,7 @@ npm run agent-loop:01 -- "请使用可用工具计算 123 + 456"
 ```
 
 ```text
-LLM #1
-↓
-Tool
-↓
-LLM #2
-↓
-STOP
+LLM #1 → Tool → LLM #2 → STOP
 ```
 
 详细说明：[`01-manual-two-step/README.md`](./01-manual-two-step/README.md)
@@ -70,8 +64,6 @@ STOP
 ```bash
 npm run agent-loop:02
 ```
-
-第一次真正使用：
 
 ```text
 while (true)
@@ -88,19 +80,50 @@ Final Answer → break
 npm run agent-loop:03
 ```
 
-重点观察：
+重点看：
 
 ```text
-[Decision] type=continue, reason=tool_call
-```
-
-以及最终：
-
-```text
-[Decision] type=done, reason=final_answer
+CONTINUE · tool_call
+DONE     · final_answer
 ```
 
 详细说明：[`03-stop-condition/README.md`](./03-stop-condition/README.md)
+
+### Agent Loop 04 · Max Steps
+
+默认：
+
+```env
+AGENT_MAX_STEPS=4
+```
+
+运行：
+
+```bash
+npm run agent-loop:04
+```
+
+重点观察两种结果：
+
+```text
+status = done
+reason = final_answer
+```
+
+或者：
+
+```text
+status = stopped
+reason = max_steps
+```
+
+想更容易看到保护性停止，可以把 `.env` 改成：
+
+```env
+AGENT_MAX_STEPS=2
+```
+
+详细说明：[`04-max-steps/README.md`](./04-max-steps/README.md)
 
 ---
 
@@ -122,15 +145,13 @@ Tool 执行次数  = 固定
 LLM #1 → Tool → LLM #2 → STOP
 ```
 
-所以这只是固定流程。
-
 ---
 
 # Agent Loop 02 · Basic Loop
 
 核心问题：**怎么让执行次数不再提前写死？**
 
-这一轮第一次引入：
+第一次引入：
 
 ```ts
 while (true) {
@@ -145,24 +166,11 @@ while (true) {
 }
 ```
 
-变化是：
+可以记成：
 
 ```text
-01
-程序决定调用几次
-
-02
-模型是否继续产生 Tool Call，决定流程是否继续
-```
-
-但当前停止判断仍然很粗糙：
-
-```text
-有 tool_calls
-→ continue
-
-没有 tool_calls
-→ break
+01 = Fixed Flow
+02 = Loop
 ```
 
 ---
@@ -171,62 +179,30 @@ while (true) {
 
 核心问题：**什么时候应该继续，什么时候才算真正完成？**
 
-这一轮第一次定义：
+把判断正式表达成：
+
+```text
+CONTINUE · tool_call
+DONE     · final_answer
+```
+
+主循环不再自己解释模型响应，而是通过：
 
 ```ts
-type LoopDecision =
-  | {
-      type: "continue"
-      reason: "tool_call"
-      toolCall: ToolCall
-    }
-  | {
-      type: "done"
-      reason: "final_answer"
-      content: string
-    }
+decideNextStep(response.message)
 ```
 
-然后把判断从主循环里抽出来：
+得到明确的 `LoopDecision`。
 
-```ts
-const decision = decideNextStep(response.message)
-```
-
-结构变成：
+同时修正：
 
 ```text
-LLM Response
-↓
-decideNextStep()
-↓
-LoopDecision
-├── CONTINUE · tool_call
-└── DONE · final_answer
-↓
-主循环执行决定
+没有 tool_calls
+≠
+一定完成
 ```
 
-## CONTINUE
-
-当模型返回一个 Tool Call：
-
-```text
-message.tool_calls.length = 1
-```
-
-得到：
-
-```text
-CONTINUE
-reason = tool_call
-```
-
-程序执行 Tool，把 Tool Result 写回 messages，然后进入下一轮。
-
-## DONE
-
-当模型：
+只有：
 
 ```text
 没有 tool_calls
@@ -234,39 +210,13 @@ reason = tool_call
 有最终 assistant content
 ```
 
-得到：
+才是：
 
 ```text
-DONE
-reason = final_answer
+DONE · final_answer
 ```
 
-程序输出最终答案并 `break`。
-
-## 一个重要修正
-
-现在不再认为：
-
-```text
-没有 tool_calls
-= 一定完成
-```
-
-如果模型既没有 Tool Call，也没有最终文本：
-
-```text
-no tool_calls
-+
-empty content
-```
-
-程序直接报错。
-
-因为：
-
-> **停止条件应该描述“为什么完成”，而不是只描述“为什么没有继续”。**
-
-所以可以记成：
+可以记成：
 
 ```text
 02 = Loop
@@ -275,43 +225,112 @@ empty content
 
 ---
 
-## 为什么下一步是 Max Steps？
+# Agent Loop 04 · Max Steps
 
-现在正常情况已经定义清楚：
+核心问题：**如果模型一直 CONTINUE，Agent 怎么防止无限运行？**
+
+这一轮正式定义：
 
 ```text
-tool_call
-→ CONTINUE
+maxSteps
+= 最多允许多少次 LLM 决策
+```
 
+配置：
+
+```env
+AGENT_MAX_STEPS=4
+```
+
+循环现在不仅有模型自己的正常完成条件，也有 Runtime 的硬边界：
+
+```text
+模型给出 final_answer
+↓
+status = done
+reason = final_answer
+```
+
+或者：
+
+```text
+模型仍然想继续
++
+step 已经到 maxSteps
+↓
+status = stopped
+reason = max_steps
+```
+
+## 为什么要区分 done 和 stopped？
+
+因为：
+
+```text
+done
+= 任务正常完成
+
+stopped
+= Runtime 强制结束
+```
+
+它们不是一回事。
+
+## 最后一个 Step 还想调用 Tool 怎么办？
+
+这一节选择：
+
+```text
+不再执行新的 Tool
+↓
+直接 max_steps
+```
+
+因为已经没有下一次 LLM 决策机会，不应该再额外执行一个可能有副作用的 Action。
+
+所以可以记成：
+
+```text
+03
+模型什么时候正常结束？
+↓
 final_answer
-→ DONE
+
+04
+模型一直不结束怎么办？
+↓
+max_steps
 ```
 
-但如果模型一直返回：
+或者更短：
+
+> **03 是模型退出条件，04 是 Runtime 运行边界。**
+
+---
+
+## 下一步为什么是 Loop State？
+
+现在循环里已经有越来越多运行数据：
 
 ```text
-CONTINUE
-↓
-CONTINUE
-↓
-CONTINUE
-↓
-...
+messages
+step
+maxSteps
+decision
+result
 ```
 
-正常 Stop Condition 永远不会触发。
-
-当前代码里的 `DEMO_CIRCUIT_BREAKER = 12` 只是防止学习代码真实调用 API 时失控，不是正式设计。
+目前它们仍然散落在主流程的局部变量里。
 
 下一轮进入：
 
 ```text
-agent-loop:04 · Max Steps
+agent-loop:05 · Loop State
 ```
 
-正式解决：
+解决：
 
-> **Agent 最多允许运行多少步？超过以后应该怎么停止？**
+> **Agent 运行过程中这些状态应该怎么统一表示？**
 
 ---
 
@@ -324,16 +343,22 @@ agent-loop:04 · Max Steps
 ### Agent Loop 02
 
 - [ ] 我能解释 `while / continue / break`。
-- [ ] 我知道执行轮数已经不再提前固定。
+- [ ] 我知道执行轮数不再提前固定。
 
 ### Agent Loop 03
 
-- [ ] 我能解释 `LoopDecision`。
-- [ ] 我能区分 `CONTINUE / DONE`。
-- [ ] 我知道 `tool_call` 为什么对应 CONTINUE。
-- [ ] 我知道 `final_answer` 为什么对应 DONE。
-- [ ] 我能看懂 `decideNextStep()`。
-- [ ] 我知道“没有 tool_calls”本身不等于有效完成。
-- [ ] 我知道为什么下一步需要 Max Steps。
+- [ ] 我能解释 `CONTINUE / DONE`。
+- [ ] 我能解释 `final_answer`。
+- [ ] 我知道“没有 tool_calls”本身不等于完成。
 
-做到这些，就进入 **agent-loop:04 · Max Steps**。
+### Agent Loop 04
+
+- [ ] 我知道为什么 Agent 不能只依赖模型自己停止。
+- [ ] 我能解释 `maxSteps`。
+- [ ] 我知道这里一个 Step 指一次 LLM 决策。
+- [ ] 我能区分 `final_answer / max_steps`。
+- [ ] 我能区分 `done / stopped`。
+- [ ] 我理解为什么最后一个 Step 仍要 Tool 时不再执行新 Tool。
+- [ ] 我实际调小过 `AGENT_MAX_STEPS` 并观察 `max_steps`。
+
+做到这些，就进入 **agent-loop:05 · Loop State**。
