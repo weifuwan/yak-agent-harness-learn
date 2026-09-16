@@ -24,7 +24,7 @@ npm run tool:02
 
 ### Tool 03 · Model Chooses Tool
 
-这一节复用前面 LLM 学习阶段的 DeepSeek 配置：
+复用 DeepSeek 配置：
 
 ```env
 MODEL_API_KEY=
@@ -32,19 +32,11 @@ MODEL_BASE_URL=https://api.deepseek.com
 MODEL_NAME=deepseek-flash
 ```
 
-先测试一个需要工具的问题：
-
 ```bash
 npm run tool:03 -- "请使用可用工具计算 123 + 456"
 ```
 
-再测试一个不需要 `add` 的问题：
-
-```bash
-npm run tool:03 -- "请用一句话解释 Java HashMap"
-```
-
-重点观察：
+重点看：
 
 ```text
 finish_reason
@@ -53,7 +45,29 @@ function.name
 function.arguments
 ```
 
-独立说明：[`03-model-chooses-tool/README.md`](./03-model-chooses-tool/README.md)
+详细说明：[`03-model-chooses-tool/README.md`](./03-model-chooses-tool/README.md)
+
+### Tool 04 · Execute Tool
+
+```bash
+npm run tool:04 -- "请使用可用工具计算 123 + 456"
+```
+
+重点看：
+
+```text
+Tool Call
+↓
+校验 Tool name
+↓
+解析 / 校验 arguments
+↓
+执行 add()
+↓
+Tool Result
+```
+
+详细说明：[`04-execute-tool/README.md`](./04-execute-tool/README.md)
 
 ---
 
@@ -80,8 +94,8 @@ function.arguments
 ```text
 01 Local Function         ✅
 02 Tool Schema            ✅
-03 Model Chooses Tool     ← 当前
-04 Execute Tool           ← 后续
+03 Model Chooses Tool     ✅
+04 Execute Tool           ← 当前
 05 Tool Result → Model    ← 后续
 06 Multiple Tools         ← 后续
 07 Unified Tool Interface ← 后续
@@ -109,12 +123,6 @@ Execute
 Output
 ```
 
-运行：
-
-```bash
-npm run tool:01 -- 123 456
-```
-
 详细说明：[`01-local-function/README.md`](./01-local-function/README.md)
 
 ---
@@ -135,20 +143,10 @@ Schema 描述：
 
 ```text
 name
-
 description
-
 parameters
-
 type
-
 required
-```
-
-运行：
-
-```bash
-npm run tool:02
 ```
 
 详细说明：[`02-tool-schema/README.md`](./02-tool-schema/README.md)
@@ -158,8 +156,6 @@ npm run tool:02
 # Tool 03 · Model Chooses Tool
 
 核心问题：**模型看到 Tool Schema 后，怎么表达“我要调用这个 Tool”？**
-
-这一节第一次把 Schema 真正发给 LLM。
 
 ```text
 User Prompt
@@ -173,17 +169,7 @@ DeepSeek
 └── 返回 tool_calls
 ```
 
-请求里第一次出现：
-
-```text
-tools
-= 可供模型选择的 Tool Schema 列表
-
-tool_choice = auto
-= 是否使用 Tool，由模型根据当前问题决定
-```
-
-如果模型选择 `add`，通常会看到：
+当模型选择 `add`：
 
 ```text
 finish_reason = tool_calls
@@ -196,64 +182,67 @@ message.tool_calls[0]
     └── arguments = {"a":123,"b":456}
 ```
 
-当前代码会把 `function.arguments` 做 `JSON.parse()`，方便观察模型生成的参数。
+这一节只生成调用意图，不执行 `add()`。
 
-但这一节**不会执行**：
-
-```ts
-add(123, 456)
-```
-
-所以当前完整流程停在：
+所以：
 
 ```text
-Tool Function
-+
-Tool Schema
-↓
-Schema 发给 DeepSeek
-↓
-模型选择 Tool
-↓
-生成 Tool Call
-↓
-STOP
+Tool Call
+≠
+Tool Execution
 ```
-
-运行：
-
-```bash
-npm run tool:03 -- "请使用可用工具计算 123 + 456"
-```
-
-代码：[`03-model-chooses-tool/index.ts`](./03-model-chooses-tool/index.ts)
 
 详细说明：[`03-model-chooses-tool/README.md`](./03-model-chooses-tool/README.md)
 
 ---
 
-## 为什么 Tool Call 还不等于执行？
+# Tool 04 · Execute Tool
 
-模型返回：
+核心问题：**模型已经返回 Tool Call，谁真正执行？**
+
+答案：**Application。**
+
+职责边界：
 
 ```text
-name = add
-arguments = { a: 123, b: 456 }
+LLM
+= 决定想调用什么
+
+Application
+= 解析、校验、执行
+
+Tool
+= 真正被执行的能力
 ```
 
-本质上只是：
+当前完整流程：
 
-> **模型生成了一份“调用意图”。**
-
-模型没有在你的 Node 进程里真正运行：
-
-```ts
-add(123, 456)
+```text
+User Prompt
++
+Tool Schema
+↓
+DeepSeek
+↓
+Tool Call
+├── name = add
+└── arguments = { a, b }
+↓
+Application
+├── 校验 name
+├── JSON.parse(arguments)
+└── 校验 a / b 类型
+↓
+add(a, b)
+↓
+Tool Result
+↓
+STOP
 ```
 
-真正执行 Tool 的仍然必须是我们的应用程序。
+为什么不能直接信任模型参数？
 
-另外，模型生成的参数不是可信输入。真正执行前需要：
+因为 `function.arguments` 是模型生成的数据。真正执行前必须：
 
 ```text
 解析
@@ -262,10 +251,86 @@ add(123, 456)
 ↓
 校验 arguments
 ↓
-再执行
+执行
 ```
 
-这个边界会在 `tool:04` 正式处理。
+当前如果输入：
+
+```text
+请使用可用工具计算 123 + 456
+```
+
+预期会观察到：
+
+```text
+name = add
+arguments = { a: 123, b: 456 }
+↓
+add(123, 456)
+↓
+579
+```
+
+但是当前仍然没有：
+
+```text
+role = tool            ❌
+tool_call_id           ❌
+把 579 发回 DeepSeek    ❌
+第二次 LLM 请求        ❌
+```
+
+所以 `tool:04` 只解决：
+
+> **谁真正执行 Tool，以及执行前为什么必须校验。**
+
+详细说明：[`04-execute-tool/README.md`](./04-execute-tool/README.md)
+
+---
+
+## 下一步为什么是 Tool Result → Model？
+
+现在程序已经拿到：
+
+```text
+Tool Result = 579
+```
+
+但 DeepSeek 不知道 Tool 最终执行出了什么。
+
+所以自然出现下一个问题：
+
+```text
+Tool Result
+↓
+怎么重新交给模型？
+```
+
+下一节才会引入：
+
+```text
+role = tool
+tool_call_id
+第二次 LLM 请求
+```
+
+完整闭环会变成：
+
+```text
+User
+↓
+LLM
+↓
+Tool Call
+↓
+Execute Tool
+↓
+Tool Result
+↓
+LLM
+↓
+Assistant
+```
 
 ---
 
@@ -274,24 +339,26 @@ add(123, 456)
 ### Tool 01
 
 - [ ] 我能解释 Tool 是一个可执行能力。
-- [ ] 我能解释 Input / Execute / Output。
 
 ### Tool 02
 
 - [ ] 我能解释 Tool Schema。
 - [ ] 我知道 Function 和 Schema 职责不同。
-- [ ] 我能解释 `name / description / parameters / required`。
 
 ### Tool 03
 
-- [ ] 我知道 Tool Schema 是通过 `tools` 发给模型的。
-- [ ] 我能解释 `tool_choice: auto`。
-- [ ] 我能解释 `finish_reason: tool_calls`。
-- [ ] 我能找到 `message.tool_calls[]`。
-- [ ] 我能找到 `function.name`。
-- [ ] 我能解析 `function.arguments`。
-- [ ] 我知道模型生成的 Tool Call 在执行前必须校验。
-- [ ] 我知道 Tool Call 只是调用意图，不代表 Tool 已经执行。
-- [ ] 我实际对比过“需要 add”和“不需要 add”的两个问题。
+- [ ] 我能解释 `tools / tool_choice / tool_calls`。
+- [ ] 我知道 Tool Call 只是调用意图。
 
-做到这些，就进入 **tool:04 · Execute Tool**。
+### Tool 04
+
+- [ ] 我知道模型不会自己执行本地函数。
+- [ ] 我能解释 LLM / Application / Tool 的职责。
+- [ ] 我知道 Tool name 要校验。
+- [ ] 我知道 `function.arguments` 不能直接信任。
+- [ ] 我能看懂 arguments 的解析与类型校验。
+- [ ] 我知道 `add()` 是由应用程序真正调用的。
+- [ ] 我能区分 Tool Call 和 Tool Result。
+- [ ] 我知道当前 Tool Result 还没有回到模型。
+
+做到这些，就进入 **tool:05 · Tool Result → Model**。
