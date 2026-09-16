@@ -35,23 +35,25 @@ npm run llm:02 -- "解释一下 HashMap"
 npm run llm:03 -- "我叫什么？"
 ```
 
-这一条会自动做一个对照实验：
+重点观察：第二轮不带历史和带 `user1 + assistant1` 历史时，模型回答有什么区别。
 
-```text
-第一轮：
-user      → 请记住：我叫魏福万
-assistant → 模型确认
+### 04 Streaming
 
-第二轮 A：不带历史
-user      → 我叫什么？
-
-第二轮 B：带历史
-user      → 请记住：我叫魏福万
-assistant → 第一轮模型回答
-user      → 我叫什么？
+```bash
+npm run llm:04 -- "请详细解释 Java HashMap 的工作原理"
 ```
 
-重点观察第二轮 A 和第二轮 B 的区别。
+这条命令会用同一个 Prompt 做两次请求：
+
+```text
+A. stream:false
+   → 等完整回答生成完，一次性拿到 message.content
+
+B. stream:true
+   → 连续收到多个 delta.content，再自己拼成完整回答
+```
+
+独立说明：[`04-streaming/README.md`](./04-streaming/README.md)
 
 ---
 
@@ -80,8 +82,9 @@ user      → 我叫什么？
 ```text
 01 Basic Call          ✅
 02 Message Roles       ✅
-03 Multi-turn Messages ← 当前
-04～08                 ← 暂时不展开
+03 Multi-turn Messages ✅
+04 Streaming           ← 当前
+05～08                 ← 暂时不展开
 ```
 
 ---
@@ -91,8 +94,6 @@ user      → 我叫什么？
 核心问题：**一次最简单的大模型调用，到底发生了什么？**
 
 先不要 System Prompt，不要 Stream，不要 Provider 抽象。
-
-只有：
 
 ```text
 User Prompt
@@ -129,8 +130,6 @@ npm run llm:01 -- "用一句话解释 HashMap"
 
 核心问题：**为什么要把“你是谁”和“用户这次要什么”分开？**
 
-在 01 的基础上只增加消息角色：
-
 ```text
 System
 “你是谁 / 你应该怎么回答”
@@ -144,7 +143,7 @@ Assistant
 “模型的回答”
 ```
 
-需要区分两个概念：
+需要区分：
 
 ```text
 system / user / assistant
@@ -160,12 +159,6 @@ Java 工程师 / 初学者老师 / 面试官
 
 ```bash
 npm run llm:02 -- "解释一下 HashMap"
-```
-
-也可以用更容易看出 persona 差异的问题：
-
-```bash
-npm run llm:02 -- "Java 中为什么重写 equals 时通常也要重写 hashCode？"
 ```
 
 这一阶段重点理解：
@@ -186,108 +179,17 @@ Assistant 是模型生成的回答
 
 > **应用在下一次请求时，把之前的 user / assistant 消息重新放进 `messages` 发送给模型。**
 
-## 先看第一轮
-
 ```text
-System
-+
-User 1：请记住，我叫魏福万
-        ↓
-      Model
-        ↓
-Assistant 1：知道了
-```
-
-第一轮请求结束后，模型调用本身就结束了。
-
-## 第二轮如果不带历史
-
-```text
-System
-+
-User 2：我叫什么？
-        ↓
-      Model
-```
-
-此时这实际上是一次新的请求。
-
-模型没有看到：
-
-```text
-User 1
-Assistant 1
-```
-
-所以它不知道第一轮发生过什么。
-
-## 第二轮如果带历史
-
-应用重新发送：
-
-```text
-System
-+
-User 1
-+
-Assistant 1
-+
-User 2
-        ↓
-      Model
-```
-
-对应的 `messages` 大致是：
-
-```json
-[
-  {
-    "role": "system",
-    "content": "你是一个简洁的对话助手..."
-  },
-  {
-    "role": "user",
-    "content": "请记住：我叫魏福万。"
-  },
-  {
-    "role": "assistant",
-    "content": "知道了。"
-  },
-  {
-    "role": "user",
-    "content": "我叫什么？"
-  }
-]
-```
-
-模型现在能回答名字，不是因为 API 自动保存了第一轮，而是因为：
-
-```text
-历史消息
-+
-当前消息
+第一轮：
+System + User 1
 ↓
-一起重新发送给模型
+Assistant 1
+
+第二轮：
+System + User 1 + Assistant 1 + User 2
+↓
+Assistant 2
 ```
-
-## 为什么 Assistant 也要放进去？
-
-因为对话历史不只有用户说过什么，还包括模型自己之前回答过什么。
-
-例如：
-
-```text
-user:
-HashMap 是什么？
-
-assistant:
-HashMap 是一种基于哈希表实现的 Map。
-
-user:
-那它和 Hashtable 有什么区别？
-```
-
-如果没有上一轮的 `assistant`，第二个 User Message 里的“它”就缺少重要上下文。
 
 所以最基础的多轮 History 是：
 
@@ -301,9 +203,7 @@ assistant
 ...
 ```
 
-## 代码
-
-[`03-multi-turn/index.ts`](./03-multi-turn/index.ts)
+代码：[`03-multi-turn/index.ts`](./03-multi-turn/index.ts)
 
 运行：
 
@@ -311,69 +211,74 @@ assistant
 npm run llm:03 -- "我叫什么？"
 ```
 
-这一次不再打印完整 HTTP / Payload，只打印当前最需要观察的内容：
-
-```text
-Round 1
-├── user
-└── assistant
-
-Round 2A · 不带历史
-├── 发送给模型的 messages
-└── assistant
-
-Round 2B · 带历史
-├── 发送给模型的 messages
-└── assistant
-```
-
-重点比较：
-
-```text
-2A messages:
-system
-user2
-
-2B messages:
-system
-user1
-assistant1
-user2
-```
-
-**这就是 llm:03 最重要的知识点。**
+独立说明：[`03-multi-turn/README.md`](./03-multi-turn/README.md)
 
 ---
 
-## 当前不要继续解决的问题
+# 04 · Streaming
 
-学完 03 后，你很快会发现一个新问题：
+核心问题：**模型回答比较慢时，能不能生成一点，就先返回一点？**
 
-```text
-每聊一轮
-↓
-messages 增加
-↓
-历史越来越长
-```
-
-但现在先不要解决它。
-
-后面会分别学习：
+03 以前：
 
 ```text
-Streaming             ❌
-Token / Context Window ❌
-Provider 抽象          ❌
-LLM class              ❌
-LLMEvent               ❌
-Tool                   ❌
-Agent Loop             ❌
-Session                ❌
-Compaction             ❌
+stream:false
+↓
+模型生成完整答案
+↓
+一次性得到 message.content
 ```
 
-先只确认：**你真的理解多轮对话为什么能成立。**
+04：
+
+```text
+stream:true
+↓
+delta 1
+↓
+delta 2
+↓
+delta 3
+↓
+...
+↓
+应用把所有 delta.content 拼起来
+```
+
+最重要的区别：
+
+```text
+非流式：choices[0].message.content
+流式：  choices[0].delta.content
+```
+
+运行：
+
+```bash
+npm run llm:04 -- "请详细解释 Java HashMap 的工作原理"
+```
+
+代码：[`04-streaming/index.ts`](./04-streaming/index.ts)
+
+详细说明：[`04-streaming/README.md`](./04-streaming/README.md)
+
+当前只需要理解：
+
+```text
+stream:false → 完整结果一次性返回
+stream:true  → 连续收到很多小 delta
+完整 Assistant = 所有 delta 按顺序拼起来
+```
+
+暂时不要引入：
+
+```text
+Provider 抽象     ❌
+LLMEvent          ❌
+Adapter           ❌
+Abort             ❌
+Retry             ❌
+```
 
 ---
 
@@ -401,4 +306,12 @@ Compaction             ❌
 - [ ] 我理解 `assistant` 是历史上下文的一部分。
 - [ ] 我能解释“多轮对话”最基础的实现方式。
 
-等 03 真正理解以后，再进入 **04 Streaming**。
+### 04 Streaming
+
+- [ ] 我能解释 `stream:false` 和 `stream:true` 的区别。
+- [ ] 我知道非流式读取的是 `message.content`。
+- [ ] 我知道流式过程中读取的是 `delta.content`。
+- [ ] 我能解释为什么完整 Assistant 需要把多个 delta 拼起来。
+- [ ] 我实际观察过终端里多个 delta 连续到达。
+
+等 04 真正理解以后，再进入 **05 Token / Context Window**。
