@@ -28,8 +28,8 @@
 
 ```text
 01 Manual Two-Step       ✅
-02 Basic Loop            ← 当前
-03 Stop Condition        ← 后续
+02 Basic Loop            ✅
+03 Stop Condition        ← 当前
 04 Max Steps             ← 后续
 05 Loop State            ← 后续
 06 Minimal Agent Runtime ← 后续
@@ -39,7 +39,7 @@
 
 ## 快速测试
 
-复用前面已经配置好的 DeepSeek：
+复用 DeepSeek 配置：
 
 ```env
 MODEL_API_KEY=
@@ -53,55 +53,54 @@ MODEL_NAME=deepseek-flash
 npm run agent-loop:01 -- "请使用可用工具计算 123 + 456"
 ```
 
-固定流程：
-
 ```text
 LLM #1
 ↓
-最多一次 Tool
+Tool
 ↓
 LLM #2
 ↓
 STOP
 ```
 
-独立说明：[`01-manual-two-step/README.md`](./01-manual-two-step/README.md)
+详细说明：[`01-manual-two-step/README.md`](./01-manual-two-step/README.md)
 
 ### Agent Loop 02 · Basic Loop
-
-推荐先直接跑默认多步场景：
 
 ```bash
 npm run agent-loop:02
 ```
 
-也可以：
+第一次真正使用：
+
+```text
+while (true)
+↓
+Tool Call → continue
+Final Answer → break
+```
+
+详细说明：[`02-basic-loop/README.md`](./02-basic-loop/README.md)
+
+### Agent Loop 03 · Stop Condition
 
 ```bash
-npm run agent-loop:02 -- "请读取 package.json，然后告诉我项目名称"
+npm run agent-loop:03
 ```
 
 重点观察：
 
 ```text
-Loop Step 1
-↓
-Tool Call
-↓
-Tool Result
-↓
-continue
-↓
-Loop Step 2
-↓
-...
-↓
-没有 Tool Call
-↓
-break
+[Decision] type=continue, reason=tool_call
 ```
 
-独立说明：[`02-basic-loop/README.md`](./02-basic-loop/README.md)
+以及最终：
+
+```text
+[Decision] type=done, reason=final_answer
+```
+
+详细说明：[`03-stop-condition/README.md`](./03-stop-condition/README.md)
 
 ---
 
@@ -109,19 +108,7 @@ break
 
 核心问题：**为什么已经有 LLM → Tool → LLM，却还不能叫 Agent Loop？**
 
-因为流程仍然是写死的：
-
-```ts
-const first = await callLLM()
-
-executeTool()
-
-const second = await callLLM()
-
-return second
-```
-
-也就是：
+因为：
 
 ```text
 LLM 调用次数   = 固定
@@ -129,37 +116,27 @@ Tool 执行次数  = 固定
 结束位置       = 固定
 ```
 
-第二次调用故意使用：
+程序提前规定：
 
 ```text
-tool_choice = none
+LLM #1 → Tool → LLM #2 → STOP
 ```
 
-程序提前规定第二次必须结束。
-
-所以它只是：
-
-```text
-固定两步流程
-```
-
-还不是自动循环。
-
-详细说明：[`01-manual-two-step/README.md`](./01-manual-two-step/README.md)
+所以这只是固定流程。
 
 ---
 
 # Agent Loop 02 · Basic Loop
 
-核心问题：**怎么让流程根据模型状态自动继续，而不是提前写死调用次数？**
+核心问题：**怎么让执行次数不再提前写死？**
 
-这一轮第一次出现：
+这一轮第一次引入：
 
 ```ts
 while (true) {
   const response = await callLLM(messages)
 
-  if (response 有 Tool Call) {
+  if (有 Tool Call) {
     executeTool()
     continue
   }
@@ -168,99 +145,17 @@ while (true) {
 }
 ```
 
-结构变成：
+变化是：
 
 ```text
-              ┌─────────────────────┐
-              │                     │
-              ↓                     │
-             LLM                    │
-              ↓                     │
-         有 Tool Call？              │
-          ├── YES                    │
-          │    ↓                    │
-          │  Execute Tool           │
-          │    ↓                    │
-          │  Tool Result            │
-          │    ↓                    │
-          │  写入 messages          │
-          │    ↓                    │
-          └── continue ─────────────┘
-
-          └── NO
-               ↓
-          Final Assistant
-               ↓
-              break
-```
-
-## 01 和 02 的本质区别
-
-```text
-agent-loop:01
+01
 程序决定调用几次
 
-agent-loop:02
+02
 模型是否继续产生 Tool Call，决定流程是否继续
 ```
 
-所以现在：
-
-```text
-LLM 调用多少次
-Tool 执行多少次
-```
-
-都不再提前固定。
-
-## messages 会不断增长
-
-开始：
-
-```text
-system
-user
-```
-
-执行一次 Tool 后：
-
-```text
-system
-user
-assistant(tool_calls #1)
-tool(result #1)
-```
-
-再执行一个 Tool 后：
-
-```text
-system
-user
-assistant(tool_calls #1)
-tool(result #1)
-assistant(tool_calls #2)
-tool(result #2)
-```
-
-下一轮模型始终会重新看到完整过程。
-
-这其实已经开始形成：
-
-```text
-Model
-↓
-Action
-↓
-Execute
-↓
-Observation
-↓
-Model
-```
-
-## 当前停止判断还很粗糙
-
-这一节暂时只写：
+但当前停止判断仍然很粗糙：
 
 ```text
 有 tool_calls
@@ -270,61 +165,153 @@ Model
 → break
 ```
 
-但还没有认真处理：
+---
 
-```text
-finish_reason
-空 content
-异常结束
-Tool 失败
+# Agent Loop 03 · Stop Condition
+
+核心问题：**什么时候应该继续，什么时候才算真正完成？**
+
+这一轮第一次定义：
+
+```ts
+type LoopDecision =
+  | {
+      type: "continue"
+      reason: "tool_call"
+      toolCall: ToolCall
+    }
+  | {
+      type: "done"
+      reason: "final_answer"
+      content: string
+    }
 ```
 
-所以 Stop Condition 还没有真正设计。
+然后把判断从主循环里抽出来：
 
-## DEMO_CIRCUIT_BREAKER
+```ts
+const decision = decideNextStep(response.message)
+```
 
-代码里有一个演示保险丝，避免真实 `while (true)` 在异常情况下持续调用付费 API。
+结构变成：
 
-它只是学习代码的保护措施。
+```text
+LLM Response
+↓
+decideNextStep()
+↓
+LoopDecision
+├── CONTINUE · tool_call
+└── DONE · final_answer
+↓
+主循环执行决定
+```
 
-真正的 `maxSteps` 会在 `agent-loop:04` 正式学习。
+## CONTINUE
 
-详细说明：[`02-basic-loop/README.md`](./02-basic-loop/README.md)
+当模型返回一个 Tool Call：
+
+```text
+message.tool_calls.length = 1
+```
+
+得到：
+
+```text
+CONTINUE
+reason = tool_call
+```
+
+程序执行 Tool，把 Tool Result 写回 messages，然后进入下一轮。
+
+## DONE
+
+当模型：
+
+```text
+没有 tool_calls
++
+有最终 assistant content
+```
+
+得到：
+
+```text
+DONE
+reason = final_answer
+```
+
+程序输出最终答案并 `break`。
+
+## 一个重要修正
+
+现在不再认为：
+
+```text
+没有 tool_calls
+= 一定完成
+```
+
+如果模型既没有 Tool Call，也没有最终文本：
+
+```text
+no tool_calls
++
+empty content
+```
+
+程序直接报错。
+
+因为：
+
+> **停止条件应该描述“为什么完成”，而不是只描述“为什么没有继续”。**
+
+所以可以记成：
+
+```text
+02 = Loop
+03 = Decision
+```
 
 ---
 
-## 下一步为什么是 Stop Condition？
+## 为什么下一步是 Max Steps？
 
-现在已经会循环了：
-
-```text
-Tool Call
-→ continue
-
-没有 Tool Call
-→ break
-```
-
-但新的问题也出现了：
-
-> **“没有 Tool Call”真的就一定代表任务完成吗？**
-
-比如：
+现在正常情况已经定义清楚：
 
 ```text
-finish_reason 是什么？
-模型 content 为空怎么办？
-请求异常怎么办？
-Tool 执行失败怎么办？
+tool_call
+→ CONTINUE
+
+final_answer
+→ DONE
 ```
 
-所以接下来进入：
+但如果模型一直返回：
 
 ```text
-agent-loop:03 · Stop Condition
+CONTINUE
+↓
+CONTINUE
+↓
+CONTINUE
+↓
+...
 ```
 
-把“什么时候继续、什么时候结束”单独拿出来学习。
+正常 Stop Condition 永远不会触发。
+
+当前代码里的 `DEMO_CIRCUIT_BREAKER = 12` 只是防止学习代码真实调用 API 时失控，不是正式设计。
+
+下一轮进入：
+
+```text
+agent-loop:04 · Max Steps
+```
+
+正式解决：
+
+> **Agent 最多允许运行多少步？超过以后应该怎么停止？**
 
 ---
 
@@ -332,19 +319,21 @@ agent-loop:03 · Stop Condition
 
 ### Agent Loop 01
 
-- [ ] 我能画出 `LLM #1 → Tool → LLM #2 → STOP`。
-- [ ] 我知道为什么固定两步还不是 Agent Loop。
-- [ ] 我知道当前调用次数是程序提前写死的。
+- [ ] 我知道固定两步为什么还不是 Agent Loop。
 
 ### Agent Loop 02
 
-- [ ] 我能解释为什么需要 `while`。
-- [ ] 我知道有 Tool Call 时为什么 `continue`。
-- [ ] 我知道没有 Tool Call 时为什么暂时 `break`。
-- [ ] 我能看懂 Tool Result 如何追加到 messages。
-- [ ] 我知道下一轮 LLM 会重新读取完整 messages。
-- [ ] 我知道 LLM / Tool 的执行轮数已经不再提前固定。
-- [ ] 我知道当前 Stop Condition 还非常粗糙。
-- [ ] 我知道演示保险丝和正式 maxSteps 不是一回事。
+- [ ] 我能解释 `while / continue / break`。
+- [ ] 我知道执行轮数已经不再提前固定。
 
-做到这些，就进入 **agent-loop:03 · Stop Condition**。
+### Agent Loop 03
+
+- [ ] 我能解释 `LoopDecision`。
+- [ ] 我能区分 `CONTINUE / DONE`。
+- [ ] 我知道 `tool_call` 为什么对应 CONTINUE。
+- [ ] 我知道 `final_answer` 为什么对应 DONE。
+- [ ] 我能看懂 `decideNextStep()`。
+- [ ] 我知道“没有 tool_calls”本身不等于有效完成。
+- [ ] 我知道为什么下一步需要 Max Steps。
+
+做到这些，就进入 **agent-loop:04 · Max Steps**。
