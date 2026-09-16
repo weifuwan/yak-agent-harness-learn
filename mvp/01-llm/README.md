@@ -1,167 +1,150 @@
-# 01 · LLM MVP
+# 01 · LLM 学习
 
-> 核心问题：**一次 Provider Turn 到底是什么？**
+> 这一阶段不从“怎么设计一个成熟 LLM Runtime”开始，而是按 LLM 应用能力的演进顺序，一点一点增加问题和能力。
 
-状态：`MVP_IMPLEMENTED / SOURCE_ANALYSIS_PENDING`
+当前原则：**没有遇到问题之前，不提前引入答案。**
 
-## 1. 它处在整个流程什么位置？
-
-```text
-Session / Agent
-      ↓
-     LLM
-      ↓
-Provider / Model
-      ↓
-Streaming Response
-      ↓
-   LLMEvent
-      ↓
-SessionProcessor
-```
-
-这个节点只负责把“调用模型”变成稳定、统一、可替换的系统能力。
-
-## 2. 如果没有它，会出现什么问题？
-
-如果上层直接调用不同 Provider SDK，Agent 会逐渐知道 OpenAI、Anthropic、Gemini、Copilot 等不同协议的认证、参数、Stream、错误和 Usage 格式。Provider 差异会污染 Agent / Session。
-
-## 3. OpenCode 用什么思路解决？
-
-目前先记录架构，不做逐行源码分析：
+## 学习路线
 
 ```text
-StreamInput
-    ↓
-LLM Request Preparation
-    ↓
-Provider Runtime
-    ↓
-AI SDK / Native Runtime
-    ↓
-Adapter
-    ↓
-Unified LLMEvent
-```
-
-当前源码入口：
-
-```text
-packages/opencode/src/session/llm.ts
-packages/opencode/src/session/llm/request.ts
-packages/opencode/src/session/llm/ai-sdk.ts
-```
-
-OpenCode 的关键思路：上层只认识统一的 LLM 输入和 `LLMEvent`，不直接依赖具体 Provider 的事件协议。
-
-## 4. 暂时不看源码，我的最小设计
-
-第一版只支持一个真实 Provider：DeepSeek Chat Completions。
-
-```text
-User
- ↓
-LLM.stream()
- ↓
-DeepSeekProvider
- ↓
-HTTP + SSE
- ↓
-ProviderEvent
- ↓
-LLMEvent
- ↓
-Console
-```
-
-最小事件：
-
-```text
-start
-text-delta
-finish
-error
-```
-
-暂时不做 Tool、Agent Loop、Session、Context、Memory、Compaction、Permission、Retry、Multi Provider。
-
-## 5. MVP 实现
-
-实现刻意不使用 AI SDK / OpenAI SDK，直接使用 Node `fetch`，这样可以看到完整 Provider Turn。
-
-```text
-src/
-├── types.ts              # LLM / Provider 的最小契约
-├── deepseek-provider.ts  # HTTP 请求 + SSE 解析
-├── llm.ts                # ProviderEvent → LLMEvent
-└── index.ts              # 最小 CLI consumer
-```
-
-核心边界：
-
-```text
-Consumer
-   ↓ 只认识 LLMEvent
-  LLM
-   ↓ 只认识 Provider interface
-Provider
+01 Basic Call
    ↓
-DeepSeek HTTP / SSE
+02 Message Roles
+   ↓
+03 Multi-turn Messages
+   ↓
+04 Streaming
+   ↓
+05 Token / Context Window
+   ↓
+06 Provider Differences
+   ↓
+07 Unified LLM Interface
+   ↓
+08 Unified Stream Events
 ```
 
-`DeepSeekProvider` 负责 Provider-specific 的 URL、Authorization、请求体、SSE 和响应 JSON；`LLM` 只负责把 Provider 输出转成统一事件，并把异常也收口成统一 `error` 事件。
-
-## 6. 验证场景
-
-见 `examples/README.md`。
-
-自动测试：
-
-```bash
-npm run test:llm
-```
-
-真实调用：
-
-```bash
-cp .env.example .env
-# 填写 MODEL_API_KEY
-npm install
-npm run mvp:llm -- "用一句话解释 Provider Turn"
-```
-
-当前测试验证：
-
-- 正常 Provider Stream → `LLMEvent`；
-- Provider 异常 → 统一 `error`；
-- `AbortSignal` 穿过 LLM 边界；
-- 替换 Provider 后 consumer 不变化。
-
-## 7. 回到 OpenCode 源码
-
-下一步再做。MVP 跑通后重点分析：
+当前只学习前两个阶段。
 
 ```text
-packages/opencode/src/session/llm.ts
-packages/opencode/src/session/llm/request.ts
-packages/opencode/src/session/llm/ai-sdk.ts
+01 Basic Call       ← 当前基础
+02 Message Roles    ← 当前基础
+03～08              ← 暂时不展开
 ```
 
-目标不是逐行读，而是回答：OpenCode 在我们的 MVP 之外，为什么还需要 Request Preparation、Provider Transform、AI SDK / Native Runtime 双路径以及更完整的事件协议。
+---
 
-## 8. 我的 MVP vs OpenCode
+## 01 · Basic Call
 
-TODO：等真实跑过 MVP 后再写。
+核心问题：**一次最简单的大模型调用，到底发生了什么？**
 
-## 9. 为什么 OpenCode 比我的 MVP 复杂？
+先不要 System Prompt，不要 Stream，不要 Provider 抽象。
 
-TODO：等源码级分析后再写。
+只有：
 
-## Done
+```text
+User Prompt
+    ↓
+HTTP Request
+    ↓
+Model
+    ↓
+HTTP Response
+    ↓
+Assistant Text
+```
 
-- [x] 能解释 Provider / Provider Turn / LLM / Agent 的区别。
-- [x] 能解释 Request Preparation 的作用。
-- [x] 能解释为什么使用 Stream。
-- [x] 能解释为什么需要统一 `LLMEvent`。
-- [x] 完成自己的 `LLM.stream()`。
-- [ ] 完成源码对比。
+学习目标：
+
+- 看清一次真实的 HTTP 请求；
+- 知道 `model` 和 `messages` 是什么；
+- 知道用户输入如何进入 `messages`；
+- 知道 Assistant 文本从响应的哪里取出来；
+- 明白当前代码只是“一次模型调用”，还不是 Agent。
+
+代码：[`01-basic-call/index.ts`](./01-basic-call/index.ts)
+
+运行：
+
+```bash
+npm run llm:01 -- "用一句话解释 HashMap"
+```
+
+---
+
+## 02 · Message Roles
+
+核心问题：**为什么要把“你是谁”和“用户这次要什么”分开？**
+
+在 01 的基础上只增加一个概念：`role`。
+
+```text
+System
+“你是谁 / 你应该怎么回答”
+        +
+User
+“这一次我要什么”
+        ↓
+      Model
+        ↓
+Assistant
+“模型的回答”
+```
+
+学习目标：
+
+- 理解 `system / user / assistant` 三种最基础角色；
+- 理解 System Prompt 是行为约束，不是当前用户任务；
+- 观察修改 System Prompt 后，同一个 User Prompt 的输出如何变化；
+- 理解角色化消息为什么比把所有内容拼成一段字符串更容易管理。
+
+代码：[`02-message-roles/index.ts`](./02-message-roles/index.ts)
+
+运行：
+
+```bash
+npm run llm:02 -- "解释一下 HashMap"
+```
+
+可以直接修改代码里的 `SYSTEM_PROMPT`，例如从 Java 助手改成“面向初学者的老师”，观察同一个 User Prompt 的差异。
+
+---
+
+## 暂时不要学的东西
+
+下面这些都已经存在于成熟 LLM / Agent 系统里，但现在先不碰：
+
+```text
+Multi-turn      ❌
+Streaming       ❌
+Token Budget    ❌
+Provider 抽象   ❌
+LLM class       ❌
+LLMEvent        ❌
+Tool            ❌
+Agent Loop      ❌
+Session         ❌
+Context         ❌
+```
+
+仓库里之前已经实现过一版 `src/` 下的 Stream / Provider / LLMEvent 实验代码。它先保留，作为后面学习 04 / 06 / 07 / 08 时的对照材料，**当前阶段不要以它作为学习入口。**
+
+---
+
+## 当前 Done 标准
+
+### 01 Basic Call
+
+- [ ] 我能解释一次请求发送了什么。
+- [ ] 我能找到 User Prompt 在请求 JSON 中的位置。
+- [ ] 我能找到 Assistant Text 在响应 JSON 中的位置。
+- [ ] 我知道这还不是 Agent。
+
+### 02 Message Roles
+
+- [ ] 我能解释 System Prompt 和 User Prompt 的区别。
+- [ ] 我能解释 `system / user / assistant` 三种角色。
+- [ ] 我实际修改过 System Prompt，并观察输出变化。
+- [ ] 我理解为什么角色信息和任务信息要分开。
+
+等这两个问题真正熟悉以后，再进入 **03 Multi-turn Messages**。
