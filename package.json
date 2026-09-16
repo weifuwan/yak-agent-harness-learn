@@ -14,6 +14,7 @@
     "llm:04": "node --env-file=.env --import tsx mvp/01-llm/04-streaming/index.ts",
     "llm:05": "node --env-file=.env --import tsx mvp/01-llm/05-token-context/index.ts",
     "llm:06": "node --env-file=.env --import tsx mvp/01-llm/06-provider-differences/index.ts",
+    "llm:07": "node --env-file=.env --import tsx mvp/01-llm/07-unified-llm-interface/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
