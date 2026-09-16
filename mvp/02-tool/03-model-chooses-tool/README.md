@@ -27,7 +27,7 @@ User Prompt
 +
 Tool Schema
 ↓
-Kimi
+DeepSeek
 ↓
 模型决定：
 直接回答？
@@ -38,19 +38,19 @@ Kimi
 
 ## 这一节第一次接 LLM
 
-当前使用 Kimi / Moonshot Chat Completions API。
+当前使用 DeepSeek Chat Completions API。
 
 需要 `.env`：
 
 ```env
-KIMI_API_KEY=
-KIMI_BASE_URL=https://api.moonshot.cn/v1
-KIMI_MODEL=kimi-k2.6
+MODEL_API_KEY=
+MODEL_BASE_URL=https://api.deepseek.com
+MODEL_NAME=deepseek-flash
 ```
 
-如果你已经在前面的 LLM 学习阶段配置过 Kimi，可以直接复用。
+这就是前面 LLM 阶段一直在用的 DeepSeek 配置，可以直接复用。
 
-Kimi 当前 Tool Calling 使用 OpenAI-compatible 的 `tools / tool_calls` 结构。
+DeepSeek 当前 Tool Calling 使用 OpenAI-compatible 的 `tools / tool_calls` 结构。
 
 ---
 
@@ -89,7 +89,7 @@ function add(a: number, b: number) {
 
 ```json
 {
-  "model": "kimi-k2.6",
+  "model": "deepseek-flash",
   "messages": [
     {
       "role": "user",
@@ -138,8 +138,6 @@ tool_choice = auto
 }
 ```
 
-这几个字段非常重要。
-
 ### finish_reason
 
 ```text
@@ -170,7 +168,7 @@ function.arguments
 
 ---
 
-## arguments 为什么是字符串？
+## arguments 为什么要 JSON.parse？
 
 你会看到：
 
@@ -178,7 +176,7 @@ function.arguments
 "arguments": "{\"a\":123,\"b\":456}"
 ```
 
-它的内容虽然是 JSON，但 API 返回的是一个序列化后的字符串。
+它的内容虽然是 JSON，但 API 返回的是一段字符串。
 
 所以代码里会做：
 
@@ -198,6 +196,8 @@ JSON.parse(toolCall.function.arguments)
 注意：
 
 > **这一节只是解析参数，不执行 `add()`。**
+
+而且模型生成的参数不能无条件信任，真正执行前需要由应用校验。
 
 ---
 
@@ -260,7 +260,7 @@ User Prompt + tools
 
 ↓
 
-Kimi
+DeepSeek
 
 ↓
 
@@ -360,6 +360,7 @@ Agent Loop             ❌
 - [ ] 我知道 `message.tool_calls[]` 是什么。
 - [ ] 我能从 Tool Call 中找到 `function.name`。
 - [ ] 我能从 Tool Call 中找到并解析 `function.arguments`。
+- [ ] 我知道模型生成的参数在执行前应该由应用校验。
 - [ ] 我知道 Tool Call 只是“调用意图”，并没有真的执行 Tool。
 - [ ] 我实际对比过“需要 add”和“不需要 add”的两个问题。
 
