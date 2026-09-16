@@ -21,6 +21,7 @@
     "tool:03": "node --env-file=.env --import tsx mvp/02-tool/03-model-chooses-tool/index.ts",
     "tool:04": "node --env-file=.env --import tsx mvp/02-tool/04-execute-tool/index.ts",
     "tool:05": "node --env-file=.env --import tsx mvp/02-tool/05-tool-result-to-model/index.ts",
+    "tool:06": "node --env-file=.env --import tsx mvp/02-tool/06-multiple-tools/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
