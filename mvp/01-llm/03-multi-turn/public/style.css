@@ -1,0 +1,356 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #16181d;
+  background: #f5f6f8;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.page-shell {
+  width: min(1400px, calc(100% - 40px));
+  min-height: calc(100vh - 40px);
+  margin: 20px auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+}
+
+.chat-panel,
+.debug-panel {
+  background: #ffffff;
+  border: 1px solid #e7e9ee;
+  border-radius: 20px;
+  box-shadow: 0 8px 28px rgba(20, 24, 32, 0.05);
+}
+
+.chat-panel {
+  min-height: calc(100vh - 40px);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+}
+
+.topbar,
+.debug-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.topbar {
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid #eef0f3;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 6px;
+  font-size: 24px;
+}
+
+h2 {
+  margin-bottom: 0;
+  font-size: 18px;
+}
+
+.subtitle,
+.debug-tip {
+  margin-bottom: 0;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.secondary-button,
+#sendButton {
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 14px;
+}
+
+.secondary-button {
+  background: #f1f3f5;
+  color: #353a42;
+}
+
+#sendButton {
+  min-width: 76px;
+  background: #111827;
+  color: #ffffff;
+}
+
+#sendButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.messages {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.empty-state {
+  height: 100%;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  color: #7b8190;
+}
+
+.empty-state strong {
+  color: #343943;
+}
+
+.message-row {
+  display: flex;
+  margin-bottom: 20px;
+}
+
+.user-row {
+  justify-content: flex-end;
+}
+
+.assistant-row {
+  justify-content: flex-start;
+}
+
+.message {
+  max-width: min(780px, 86%);
+  border-radius: 16px;
+  line-height: 1.7;
+}
+
+.user-message {
+  padding: 11px 15px;
+  white-space: pre-wrap;
+  background: #111827;
+  color: #ffffff;
+  border-bottom-right-radius: 5px;
+}
+
+.assistant-message {
+  width: min(780px, 100%);
+  padding: 2px 2px;
+  color: #242830;
+}
+
+.pending-message,
+.error-message {
+  padding: 10px 13px;
+  background: #f5f6f8;
+  color: #7b8190;
+}
+
+.error-message {
+  color: #b42318;
+  background: #fff2f0;
+}
+
+.composer {
+  margin: 0 20px 20px;
+  padding: 12px;
+  border: 1px solid #dfe2e8;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+#promptInput {
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: 0;
+  line-height: 1.6;
+  color: #1f232b;
+}
+
+#promptInput::placeholder {
+  color: #9aa0aa;
+}
+
+.composer-footer {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#statusText {
+  font-size: 12px;
+  color: #8b919c;
+}
+
+.debug-panel {
+  min-width: 0;
+  padding: 20px;
+  overflow: hidden;
+}
+
+.memory-badge {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.debug-tip {
+  margin-top: 14px;
+  font-size: 13px;
+}
+
+.debug-tip code {
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: #f2f3f5;
+}
+
+#messagesJson {
+  margin: 16px 0 0;
+  padding: 14px;
+  min-height: 220px;
+  max-height: calc(100vh - 210px);
+  overflow: auto;
+  border-radius: 12px;
+  background: #111827;
+  color: #d7e0ee;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  margin: 1.35em 0 0.55em;
+  line-height: 1.35;
+}
+
+.markdown-body h1 {
+  font-size: 1.45em;
+}
+
+.markdown-body h2 {
+  font-size: 1.28em;
+}
+
+.markdown-body h3 {
+  font-size: 1.12em;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body pre,
+.markdown-body blockquote {
+  margin: 0.7em 0;
+}
+
+.markdown-body code {
+  padding: 0.15em 0.38em;
+  border-radius: 5px;
+  background: #f0f2f5;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+
+.markdown-body pre {
+  overflow-x: auto;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #111827;
+  color: #e5edf7;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.markdown-body blockquote {
+  padding-left: 12px;
+  border-left: 3px solid #d8dce4;
+  color: #626975;
+}
+
+.markdown-body a {
+  color: #3156d3;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 8px 10px;
+  border: 1px solid #e0e3e8;
+  text-align: left;
+}
+
+@media (max-width: 980px) {
+  .page-shell {
+    width: min(100% - 20px, 820px);
+    grid-template-columns: 1fr;
+  }
+
+  .chat-panel {
+    min-height: 78vh;
+  }
+
+  .debug-panel {
+    min-height: 320px;
+  }
+
+  #messagesJson {
+    max-height: 420px;
+  }
+}
