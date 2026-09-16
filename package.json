@@ -11,6 +11,7 @@
     "llm:01": "node --env-file=.env --import tsx mvp/01-llm/01-basic-call/index.ts",
     "llm:02": "node --env-file=.env --import tsx mvp/01-llm/02-message-roles/index.ts",
     "llm:03": "node --env-file=.env --import tsx mvp/01-llm/03-multi-turn/index.ts",
+    "llm:04": "node --env-file=.env --import tsx mvp/01-llm/04-streaming/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
