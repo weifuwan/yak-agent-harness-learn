@@ -16,47 +16,40 @@ const deepSeekApiKey = process.env.MODEL_API_KEY?.trim()
 const deepSeekBaseUrl = (process.env.MODEL_BASE_URL ?? "https://api.deepseek.com").replace(/\/+$/, "")
 const deepSeekModel = process.env.MODEL_NAME?.trim() || "deepseek-flash"
 
-const anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim()
-const anthropicBaseUrl = (process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com").replace(/\/+$/, "")
-const anthropicModel = process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-5"
+const kimiApiKey = process.env.KIMI_API_KEY?.trim()
+const kimiBaseUrl = (process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1").replace(/\/+$/, "")
+const kimiModel = process.env.KIMI_MODEL?.trim() || "kimi-k3"
 
 const userPrompt = process.argv.slice(2).join(" ").trim() || "请用三句话解释 Java HashMap。"
 const SYSTEM_PROMPT = "你是一个简洁、准确的 Java 编程老师。"
 
-if (!deepSeekApiKey) {
-  throw new Error("MODEL_API_KEY is required. Copy .env.example to .env and fill it in.")
+if (!deepSeekApiKey && !kimiApiKey) {
+  throw new Error("MODEL_API_KEY or KIMI_API_KEY is required. Copy .env.example to .env and fill at least one key.")
 }
 
-function printRequest(title: string, url: string, headers: Record<string, string>, body: unknown) {
+function printRequest(title: string, url: string, body: unknown) {
   console.log(`\n========== ${title} ==========`)
   console.log(`URL: ${url}`)
-  console.log("Headers:")
-  console.log(JSON.stringify(headers, null, 2))
+  console.log("Authorization: Bearer <redacted>")
   console.log("Body:")
   console.log(JSON.stringify(body, null, 2))
 }
 
-async function callDeepSeek(): Promise<ProviderResult> {
+async function callDeepSeek(): Promise<ProviderResult | undefined> {
+  if (!deepSeekApiKey) {
+    console.log("\n========== Provider A · DeepSeek ==========")
+    console.log("未配置 MODEL_API_KEY，本次跳过 DeepSeek。")
+    return undefined
+  }
+
   const url = `${deepSeekBaseUrl}/chat/completions`
   const messages: Message[] = [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: userPrompt },
   ]
-  const body = {
-    model: deepSeekModel,
-    messages,
-    stream: false,
-  }
+  const body = { model: deepSeekModel, messages, stream: false }
 
-  printRequest(
-    "Provider A · DeepSeek (OpenAI-compatible)",
-    url,
-    {
-      Authorization: "Bearer <redacted>",
-      "Content-Type": "application/json",
-    },
-    body,
-  )
+  printRequest("Provider A · DeepSeek", url, body)
 
   const response = await fetch(url, {
     method: "POST",
@@ -68,17 +61,11 @@ async function callDeepSeek(): Promise<ProviderResult> {
   })
 
   const rawBody = await response.text()
-  if (!response.ok) {
-    throw new Error(`DeepSeek HTTP ${response.status}: ${rawBody}`)
-  }
+  if (!response.ok) throw new Error(`DeepSeek HTTP ${response.status}: ${rawBody}`)
 
   const payload = JSON.parse(rawBody) as {
     model?: string
-    choices?: Array<{
-      message?: {
-        content?: string | null
-      }
-    }>
+    choices?: Array<{ message?: { content?: string | null } }>
     usage?: {
       prompt_tokens?: number
       completion_tokens?: number
@@ -89,12 +76,9 @@ async function callDeepSeek(): Promise<ProviderResult> {
   const content = payload.choices?.[0]?.message?.content?.trim()
   if (!content) throw new Error("DeepSeek returned no assistant text")
 
-  console.log("\nAssistant 取值路径:")
-  console.log("choices[0].message.content")
-  console.log("\nAssistant:")
-  console.log(content)
-  console.log("\nUsage:")
-  console.log(JSON.stringify(payload.usage ?? {}, null, 2))
+  console.log("Assistant path: choices[0].message.content")
+  console.log(`Assistant: ${content}`)
+  console.log("Usage:", payload.usage ?? {})
 
   return {
     provider: "DeepSeek",
@@ -106,136 +90,105 @@ async function callDeepSeek(): Promise<ProviderResult> {
   }
 }
 
-async function callAnthropic(): Promise<ProviderResult | undefined> {
-  if (!anthropicApiKey) {
-    console.log("\n========== Provider B · Anthropic ==========")
-    console.log("未配置 ANTHROPIC_API_KEY，本次跳过真实 Anthropic 请求。")
-    console.log("如需完整对比，在 .env 中填写 ANTHROPIC_API_KEY 和 ANTHROPIC_MODEL 后重新运行。")
+async function callKimi(): Promise<ProviderResult | undefined> {
+  if (!kimiApiKey) {
+    console.log("\n========== Provider B · Kimi ==========")
+    console.log("未配置 KIMI_API_KEY，本次跳过 Kimi。")
     return undefined
   }
 
-  const url = `${anthropicBaseUrl}/v1/messages`
-  const body = {
-    model: anthropicModel,
-    max_tokens: 512,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: userPrompt,
-      },
-    ],
-    stream: false,
-  }
+  const url = `${kimiBaseUrl}/chat/completions`
+  const messages: Message[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: userPrompt },
+  ]
+  const body = { model: kimiModel, messages, stream: false }
 
-  printRequest(
-    "Provider B · Anthropic",
-    url,
-    {
-      "x-api-key": "<redacted>",
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body,
-  )
+  printRequest("Provider B · Kimi / Moonshot", url, body)
 
   const response = await fetch(url, {
     method: "POST",
     headers: {
-      "x-api-key": anthropicApiKey,
-      "anthropic-version": "2023-06-01",
+      Authorization: `Bearer ${kimiApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
   })
 
   const rawBody = await response.text()
-  if (!response.ok) {
-    throw new Error(`Anthropic HTTP ${response.status}: ${rawBody}`)
-  }
+  if (!response.ok) throw new Error(`Kimi HTTP ${response.status}: ${rawBody}`)
 
   const payload = JSON.parse(rawBody) as {
     model?: string
-    content?: Array<{
-      type?: string
-      text?: string
-    }>
+    choices?: Array<{ message?: { content?: string | null } }>
     usage?: {
-      input_tokens?: number
-      output_tokens?: number
+      prompt_tokens?: number
+      completion_tokens?: number
+      total_tokens?: number
     }
   }
 
-  const content = (payload.content ?? [])
-    .filter((block) => block.type === "text" && typeof block.text === "string")
-    .map((block) => block.text)
-    .join("")
-    .trim()
+  const content = payload.choices?.[0]?.message?.content?.trim()
+  if (!content) throw new Error("Kimi returned no assistant text")
 
-  if (!content) throw new Error("Anthropic returned no text content")
-
-  console.log("\nAssistant 取值路径:")
-  console.log("content[] → type=text → text")
-  console.log("\nAssistant:")
-  console.log(content)
-  console.log("\nUsage:")
-  console.log(JSON.stringify(payload.usage ?? {}, null, 2))
-
-  const inputTokens = payload.usage?.input_tokens
-  const outputTokens = payload.usage?.output_tokens
+  console.log("Assistant path: choices[0].message.content")
+  console.log(`Assistant: ${content}`)
+  console.log("Usage:", payload.usage ?? {})
 
   return {
-    provider: "Anthropic",
-    model: payload.model ?? anthropicModel,
+    provider: "Kimi",
+    model: payload.model ?? kimiModel,
     content,
-    inputTokens,
-    outputTokens,
-    totalTokens:
-      inputTokens !== undefined && outputTokens !== undefined
-        ? inputTokens + outputTokens
-        : undefined,
+    inputTokens: payload.usage?.prompt_tokens,
+    outputTokens: payload.usage?.completion_tokens,
+    totalTokens: payload.usage?.total_tokens,
   }
 }
 
 console.log("========== 06 Provider Differences ==========")
 console.log(`同一个 User Prompt: ${userPrompt}`)
-console.log("这一步先观察差异，不做统一 Provider interface。")
+console.log("这一步先观察真实 Provider 差异，不做统一 Provider interface。")
 
 const deepSeekResult = await callDeepSeek()
-const anthropicResult = await callAnthropic()
+const kimiResult = await callKimi()
 
-console.log("\n========== Differences ==========")
+console.log("\n========== Protocol Comparison ==========")
 console.table([
   {
-    item: "Endpoint",
-    DeepSeek: "/chat/completions",
-    Anthropic: "/v1/messages",
+    item: "Provider",
+    DeepSeek: "DeepSeek",
+    Kimi: "Moonshot / Kimi",
   },
   {
-    item: "System Prompt",
-    DeepSeek: "messages 中 role=system",
-    Anthropic: "body.system",
+    item: "Protocol",
+    DeepSeek: "OpenAI-compatible",
+    Kimi: "OpenAI-compatible",
+  },
+  {
+    item: "Endpoint",
+    DeepSeek: `${deepSeekBaseUrl}/chat/completions`,
+    Kimi: `${kimiBaseUrl}/chat/completions`,
+  },
+  {
+    item: "Auth",
+    DeepSeek: "Bearer API Key",
+    Kimi: "Bearer API Key",
   },
   {
     item: "Assistant",
     DeepSeek: "choices[0].message.content",
-    Anthropic: "content[].text",
+    Kimi: "choices[0].message.content",
   },
   {
-    item: "Input usage",
-    DeepSeek: "prompt_tokens",
-    Anthropic: "input_tokens",
-  },
-  {
-    item: "Output usage",
-    DeepSeek: "completion_tokens",
-    Anthropic: "output_tokens",
+    item: "Usage",
+    DeepSeek: "prompt/completion/total_tokens",
+    Kimi: "prompt/completion/total_tokens",
   },
 ])
 
 console.log("\n========== Result Summary ==========")
 console.table(
-  [deepSeekResult, anthropicResult]
+  [deepSeekResult, kimiResult]
     .filter((result): result is ProviderResult => Boolean(result))
     .map((result) => ({
       provider: result.provider,
@@ -247,6 +200,7 @@ console.table(
 )
 
 console.log("\n[关键观察]")
-console.log("两边做的事情都是：输入 messages / prompt → 得到 Assistant。")
-console.log("但 URL、请求 Body、响应结构、Usage 字段并不完全一样。")
-console.log("现在先接受这些重复代码；下一节再讨论为什么要统一接口。")
+console.log("DeepSeek 和 Kimi 是两个不同 Provider。")
+console.log("但它们都兼容 OpenAI Chat Completions，所以简单聊天协议高度相似。")
+console.log("Provider 不同，不代表协议一定不同；Provider 与 Protocol 是两个概念。")
+console.log("下一节仍然会把 Provider 隔离起来，让 consumer 不依赖具体服务商。")
