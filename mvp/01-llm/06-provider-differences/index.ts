@@ -132,7 +132,7 @@ async function callAnthropic(): Promise<ProviderResult | undefined> {
     "Provider B · Anthropic",
     url,
     {
-      Authorization: "Bearer <redacted>",
+      "x-api-key": "<redacted>",
       "anthropic-version": "2023-06-01",
       "Content-Type": "application/json",
     },
@@ -142,7 +142,7 @@ async function callAnthropic(): Promise<ProviderResult | undefined> {
   const response = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${anthropicApiKey}`,
+      "x-api-key": anthropicApiKey,
       "anthropic-version": "2023-06-01",
       "Content-Type": "application/json",
     },
