@@ -13,57 +13,7 @@ npm install
 cp .env.example .env
 ```
 
-在 `.env` 中填写 `MODEL_API_KEY` 后，直接运行对应阶段。
-
-### 01 · Basic Call
-
-```bash
-npm run llm:01 -- "用一句话解释 HashMap"
-```
-
-### 02 · Message Roles
-
-```bash
-npm run llm:02 -- "解释一下 HashMap"
-```
-
-### 03 · Multi-turn Messages
-
-```bash
-npm run llm:03 -- "我叫什么？"
-```
-
-### 04 · Streaming
-
-```bash
-npm run llm:04 -- "请详细解释 Java HashMap 的工作原理"
-```
-
-### 05 · Token / Context Window
-
-```bash
-npm run llm:05 -- "Java HashMap"
-```
-
-### 06 · Provider Differences
-
-```bash
-npm run llm:06 -- "请用三句话解释 Java HashMap"
-```
-
-### 07 · Unified LLM Interface
-
-```bash
-npm run llm:07 -- "请用三句话解释 Java HashMap"
-```
-
-### 08 · Unified Stream Events
-
-```bash
-npm run llm:08 -- "请用一小段话解释 Java HashMap，控制在 120 字以内"
-```
-
-DeepSeek 使用：
+DeepSeek：
 
 ```env
 MODEL_API_KEY=
@@ -71,15 +21,36 @@ MODEL_BASE_URL=https://api.deepseek.com
 MODEL_NAME=deepseek-flash
 ```
 
-Anthropic 可选：
+Kimi / Moonshot 中国区 Open Platform：
 
 ```env
-ANTHROPIC_API_KEY=
-ANTHROPIC_BASE_URL=https://api.anthropic.com
-ANTHROPIC_MODEL=claude-sonnet-5
+KIMI_API_KEY=
+KIMI_BASE_URL=https://api.moonshot.cn/v1
+KIMI_MODEL=kimi-k3
 ```
 
-没有 `ANTHROPIC_API_KEY` 时，06～08 的 Anthropic 部分会自动跳过。
+国际版 Open Platform：
+
+```env
+KIMI_BASE_URL=https://api.moonshot.ai/v1
+```
+
+> 06～08 只配置 DeepSeek 或只配置 Kimi 都能运行；没配置的 Provider 会自动跳过。
+
+---
+
+## 运行命令
+
+```bash
+npm run llm:01 -- "用一句话解释 HashMap"
+npm run llm:02 -- "解释一下 HashMap"
+npm run llm:03 -- "我叫什么？"
+npm run llm:04 -- "请详细解释 Java HashMap 的工作原理"
+npm run llm:05 -- "Java HashMap"
+npm run llm:06 -- "请用三句话解释 Java HashMap"
+npm run llm:07 -- "请用三句话解释 Java HashMap"
+npm run llm:08 -- "请用一小段话解释 Java HashMap，控制在 120 字以内"
+```
 
 ---
 
@@ -134,8 +105,6 @@ HTTP Response
 Assistant Text
 ```
 
-运行：
-
 ```bash
 npm run llm:01 -- "用一句话解释 HashMap"
 ```
@@ -152,8 +121,6 @@ user      = 用户说的话
 assistant = 模型说的话
 ```
 
-运行：
-
 ```bash
 npm run llm:02 -- "解释一下 HashMap"
 ```
@@ -166,13 +133,11 @@ npm run llm:02 -- "解释一下 HashMap"
 
 > **Multi-turn 最基础的实现，就是应用保存 History，并在下一轮重新发送。**
 
-运行：
-
 ```bash
 npm run llm:03 -- "我叫什么？"
 ```
 
-独立说明：[`03-multi-turn/README.md`](./03-multi-turn/README.md)
+详细说明：[`03-multi-turn/README.md`](./03-multi-turn/README.md)
 
 ---
 
@@ -185,13 +150,11 @@ stream:false → message.content
 stream:true  → delta.content → 拼成完整 Assistant
 ```
 
-运行：
-
 ```bash
 npm run llm:04 -- "请详细解释 Java HashMap 的工作原理"
 ```
 
-独立说明：[`04-streaming/README.md`](./04-streaming/README.md)
+详细说明：[`04-streaming/README.md`](./04-streaming/README.md)
 
 ---
 
@@ -215,48 +178,60 @@ prompt_tokens 增加
 逐渐逼近 Context Window
 ```
 
-运行：
-
 ```bash
 npm run llm:05 -- "Java HashMap"
 ```
 
-独立说明：[`05-token-context/README.md`](./05-token-context/README.md)
+详细说明：[`05-token-context/README.md`](./05-token-context/README.md)
 
 ---
 
 # 06 · Provider Differences
 
-核心问题：**同样都是调用 LLM，换一个 Provider 后，底层协议还一样吗？**
+核心问题：**Provider 不同，Protocol 一定不同吗？**
+
+先区分：
 
 ```text
 Provider = 谁提供模型服务
 Model    = 具体调用哪个模型
-API      = 通过什么协议调用
+Protocol = API 请求 / 响应遵循什么规范
 ```
 
-这一节故意把 DeepSeek / Anthropic 两套调用并排写出来：
+本节对比：
 
 ```text
-                DeepSeek                    Anthropic
-Endpoint        /chat/completions           /v1/messages
-System          messages role=system        body.system
-Assistant       choices[0].message.content  content[].text
-Input usage     prompt_tokens               input_tokens
-Output usage    completion_tokens           output_tokens
+DeepSeek
+vs
+Kimi / Moonshot
 ```
 
-目标不是解决差异，而是先看见：
+这次会发现：
 
 ```text
-业务能力相同
-↓
-Provider 协议不同
-↓
-重复和差异开始出现
+                  DeepSeek              Kimi
+Provider          DeepSeek              Moonshot / Kimi
+Protocol          OpenAI-compatible     OpenAI-compatible
+Endpoint Host     api.deepseek.com      api.moonshot.cn
+Auth              Bearer                Bearer
+Assistant         choices[0]...content  choices[0]...content
+Usage             prompt/completion     prompt/completion
 ```
 
-运行：
+所以关键结论是：
+
+> **Provider 不同，不代表 Protocol 一定不同。**
+
+即使协议高度相似，仍然存在不同的：
+
+```text
+Base URL
+API Key
+Model
+模型能力
+价格 / 配额
+Provider-specific 扩展
+```
 
 ```bash
 npm run llm:06 -- "请用三句话解释 Java HashMap"
@@ -268,7 +243,7 @@ npm run llm:06 -- "请用三句话解释 Java HashMap"
 
 # 07 · Unified LLM Interface
 
-核心问题：**怎么让上层业务代码不再关心 DeepSeek / Anthropic 的协议差异？**
+核心问题：**怎么让上层业务代码不依赖具体 Provider？**
 
 统一输入：
 
@@ -292,30 +267,30 @@ LLMResponse = {
 }
 ```
 
-统一 Provider 接口：
+统一 Provider：
 
 ```ts
 interface Provider {
   name: string
   model: string
-
   chat(request: LLMRequest): Promise<LLMResponse>
 }
 ```
 
-于是 consumer 只需要：
+当前实现：
 
 ```text
-Provider
-↓
-provider.chat(request)
-↓
-LLMResponse
+DeepSeekProvider
+KimiProvider
 ```
 
-换 Provider 后，consumer 不需要修改。
+consumer 始终只调用：
 
-运行：
+```ts
+provider.chat(request)
+```
+
+换 Provider，consumer 不需要改。
 
 ```bash
 npm run llm:07 -- "请用三句话解释 Java HashMap"
@@ -327,27 +302,9 @@ npm run llm:07 -- "请用三句话解释 Java HashMap"
 
 # 08 · Unified Stream Events
 
-核心问题：**07 已经隐藏了完整 Response 的差异，Streaming 过程中不同 Provider 的事件差异怎么办？**
+核心问题：**怎么让 consumer 不依赖 Provider 的原始 Streaming 数据？**
 
-DeepSeek 流式协议里会看到：
-
-```text
-choices[0].delta.content
-...
-data: [DONE]
-```
-
-Anthropic 流式协议里会看到：
-
-```text
-message_start
-content_block_delta + text_delta
-message_stop
-```
-
-如果 consumer 直接处理这些原始协议，就又会被 Provider 差异污染。
-
-所以 08 定义最小统一事件：
+定义最小统一事件：
 
 ```ts
 type LLMEvent =
@@ -356,13 +313,13 @@ type LLMEvent =
   | { type: "finish" }
 ```
 
-Provider 对外统一成：
+Provider 对外统一：
 
 ```ts
 stream(request: LLMRequest): AsyncIterable<LLMEvent>
 ```
 
-consumer 只需要：
+consumer：
 
 ```ts
 for await (const event of provider.stream(request)) {
@@ -370,7 +327,17 @@ for await (const event of provider.stream(request)) {
 }
 ```
 
-结构变成：
+当前 DeepSeek 和 Kimi 都兼容 OpenAI Chat Completions Streaming，所以原始文字流都很相似：
+
+```text
+choices[0].delta.content
+...
+data: [DONE]
+```
+
+但 consumer 仍然不直接依赖这些外部字段。
+
+结构是：
 
 ```text
 DeepSeek raw stream
@@ -379,108 +346,63 @@ DeepSeekProvider
         ↓
       LLMEvent
         ↑
-AnthropicProvider
+KimiProvider
         ↑
-Anthropic raw stream
+Kimi raw stream
 ```
 
 所以：
 
 ```text
 07
-隐藏 Provider 的“最终结果差异”
+固定“调用完成后拿到什么”
 
 08
-隐藏 Provider 的“流式过程差异”
+固定“生成过程中看到什么”
 ```
-
-运行：
 
 ```bash
 npm run llm:08 -- "请用一小段话解释 Java HashMap，控制在 120 字以内"
 ```
 
-代码：
+当前目录：
 
 ```text
 08-unified-stream-events/
 ├── types.ts
 ├── deepseek-provider.ts
-├── anthropic-provider.ts
+├── kimi-provider.ts
 ├── index.ts
 └── README.md
 ```
 
 详细说明：[`08-unified-stream-events/README.md`](./08-unified-stream-events/README.md)
 
-这一阶段先只统一文字流：
-
-```text
-start
-text-delta
-finish
-```
-
-暂时不要继续增加：
-
-```text
-Reasoning Event ❌
-Tool Call Event ❌
-Usage Event     ❌
-Error Event     ❌
-Abort           ❌
-Retry           ❌
-```
-
 ---
 
 ## 当前 Done 标准
 
-### 01 Basic Call
+### 01～05
 
-- [ ] 我能解释一次请求发送了什么。
-- [ ] 我知道 Assistant Text 从哪里取出来。
-
-### 02 Message Roles
-
-- [ ] 我能解释 `system / user / assistant`。
-- [ ] 我能区分 message role 和 persona。
-
-### 03 Multi-turn Messages
-
-- [ ] 我知道每一轮仍然是一次新的模型请求。
-- [ ] 我能解释为什么要重新发送 History。
-
-### 04 Streaming
-
-- [ ] 我能解释 `stream:false / stream:true`。
-- [ ] 我知道 `message.content / delta.content` 的区别。
-
-### 05 Token / Context Window
-
-- [ ] 我能用自己的话解释 Token。
-- [ ] 我能解释 Context Window。
-- [ ] 我观察过 History 增长后 `prompt_tokens` 的变化。
+- [ ] 我理解一次调用、Message Role、Multi-turn、Streaming、Token、Context Window。
 
 ### 06 Provider Differences
 
-- [ ] 我能解释 Provider 和 Model 的区别。
-- [ ] 我能说出 DeepSeek 和 Anthropic 至少 3 个协议差异。
-- [ ] 我理解为什么 06 故意不做抽象。
+- [ ] 我能区分 Provider / Model / Protocol。
+- [ ] 我知道 DeepSeek 和 Kimi 是不同 Provider，但都兼容 OpenAI Chat Completions。
+- [ ] 我知道 Provider 不同不代表协议一定不同。
 
 ### 07 Unified LLM Interface
 
-- [ ] 我能解释 `LLMRequest / LLMResponse`。
-- [ ] 我能解释为什么换 Provider 后 consumer 不需要修改。
-- [ ] 我知道 07 只统一了完整请求 / 完整响应。
+- [ ] 我能解释 `LLMRequest / LLMResponse / Provider.chat()`。
+- [ ] 我能解释为什么换 DeepSeek / Kimi 后 consumer 不需要修改。
 
 ### 08 Unified Stream Events
 
-- [ ] 我知道 DeepSeek / Anthropic 的原始 Streaming 协议不同。
 - [ ] 我能解释 `start / text-delta / finish`。
 - [ ] 我能解释 `AsyncIterable<LLMEvent>`。
-- [ ] 我能看懂 `for await...of` 如何消费事件。
-- [ ] 我知道 Provider 负责把原始 Stream 翻译成统一 LLMEvent。
-- [ ] 我能解释为什么换 Provider 后 stream consumer 也不需要修改。
+- [ ] 我能看懂 `for await...of` 如何消费流事件。
+- [ ] 我知道 Provider 负责把原始 Stream 转换成统一 LLMEvent。
+- [ ] 我能解释为什么 DeepSeek / Kimi 虽然流式协议很像，内部事件边界仍然有价值。
 
 等 08 真正理解以后，`01-LLM` 这一轮基础学习就可以先封板。
