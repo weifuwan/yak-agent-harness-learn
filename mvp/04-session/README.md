@@ -27,8 +27,8 @@
 当前进度：
 
 ```text
-01 No Session            ← 当前
-02 In-Memory Session     ← 后续
+01 No Session            ✅
+02 In-Memory Session     ← 当前
 03 Full Session History  ← 后续
 04 Multiple Sessions     ← 后续
 05 Persist Session       ← 后续
@@ -39,7 +39,7 @@
 
 ## Session 和 Agent Loop 的边界
 
-Agent Loop 已经解决：
+Agent Loop 解决：
 
 ```text
 一次 runAgent()
@@ -55,20 +55,21 @@ LLM
 完成
 ```
 
-但是 Run 结束以后，内部的：
+Session 解决：
 
 ```text
-messages
-Tool Call
-Tool Result
-运行过程
+Run #1
+↓
+历史留下
+↓
+Run #2
+↓
+继续使用上一轮历史
 ```
 
-并不会自动进入下一次 `runAgent()`。
+所以：
 
-所以 Session 要解决的是：
-
-> **多个 Agent Run 之间，如何保留连续的历史。**
+> **Agent Loop 管一次 Run；Session 管多个 Run 之间的连续历史。**
 
 ---
 
@@ -82,7 +83,7 @@ Tool Result
 npm run session:01
 ```
 
-程序会连续执行两次独立的 `runAgent()`：
+程序执行两次完全独立的 Agent Run：
 
 ```text
 Run #1
@@ -98,44 +99,135 @@ Run #2
 没有 Run #1 的 messages
 ```
 
-这一轮故意不创建任何 Session。
+结论：
 
-独立说明：[`01-no-session/README.md`](./01-no-session/README.md)
+```text
+Agent Loop 能完成一次 Run
+≠
+多个 Run 会自动形成连续对话
+```
+
+详细说明：[`01-no-session/README.md`](./01-no-session/README.md)
 
 ---
 
-## 为什么下一步是 In-Memory Session？
+# Session 02 · In-Memory Session
 
-现在已经明确：
+核心问题：**两个 Agent Run 怎么先在同一个进程里共享历史？**
 
-```text
-Run #1 history
-↓
-runAgent() 结束
-↓
-Run #2 无法继续使用
-```
-
-下一轮只做最小答案：
+这一轮第一次定义：
 
 ```ts
 type Session = {
-  messages: Message[]
+  messages: SessionMessage[]
 }
 ```
 
-先让两个 Run 在同一进程里共享一份历史。
-
-暂时不做：
+最小流程：
 
 ```text
-sessionId
-多 Session
-JSON 持久化
-数据库
-Context 裁剪
-Compaction
+createSession()
+↓
+Session.messages = []
+↓
+Run #1
+↓
+user + final assistant
+写回 Session
+↓
+Run #2
+↓
+重新把 Session.messages 发给模型
+↓
+模型可以继续上一轮对话
 ```
+
+运行：
+
+```bash
+npm run session:02
+```
+
+默认场景：
+
+```text
+Run #1
+User: 记住 YAK-SESSION-0427
+Assistant: YAK-SESSION-0427
+
+Run #2
+User: 刚才的代号是什么？
+Assistant: YAK-SESSION-0427
+```
+
+你会看到 Session 快照：
+
+```text
+initial      → messages: 0
+after run #1 → messages: 2
+after run #2 → messages: 4
+```
+
+这一轮最重要的认识：
+
+> **模型并没有自己记住，而是应用把上一轮历史重新传给模型。**
+
+## 这一轮故意只保存文本
+
+当前 Session 只保存：
+
+```text
+user
+assistant(final text)
+```
+
+暂时不保存：
+
+```text
+assistant(tool_calls)
+tool(result)
+```
+
+因为下一轮要专门研究：
+
+> **只保存聊天文本，真的能代表 Agent 完整发生历史吗？**
+
+详细说明：[`02-in-memory-session/README.md`](./02-in-memory-session/README.md)
+
+---
+
+## 为什么下一步是 Full Session History？
+
+现在跨 Run 已经可以继续对话了。
+
+但如果 Run 中发生：
+
+```text
+assistant(tool_call)
+↓
+tool(result)
+↓
+assistant(final answer)
+```
+
+当前 Session 最终只留下：
+
+```text
+user
+assistant(final answer)
+```
+
+中间真正执行过什么 Tool、Tool 返回了什么，都没有保存。
+
+所以下一轮进入：
+
+```text
+session:03 · Full Session History
+```
+
+解决：
+
+> **Session 到底应该保存哪些事件，才能成为 Agent 的完整历史？**
 
 ---
 
@@ -145,8 +237,16 @@ Compaction
 
 - [ ] 我知道为什么两个 `runAgent()` 默认互相隔离。
 - [ ] 我知道 LoopState 只属于一次 Agent Run。
-- [ ] 我知道 Agent Loop 和 Session 解决的是不同层的问题。
-- [ ] 我能解释为什么现在还没有任何“记忆”。
-- [ ] 我知道下一步为什么只需要先做 In-Memory Session。
 
-做到这些，就进入 **session:02 · In-Memory Session**。
+### Session 02
+
+- [ ] 我能解释 `Session.messages`。
+- [ ] 我知道为什么同一个 Session 可以跨多个 Run 使用。
+- [ ] 我知道模型不是自己记住历史，而是应用重新传入历史。
+- [ ] 我能画出 `Run #1 → Session → Run #2`。
+- [ ] 我知道当前 Session 只存在于内存。
+- [ ] 我知道进程退出后它仍然会消失。
+- [ ] 我知道当前只保存 user / assistant 文本。
+- [ ] 我知道下一步为什么要保存完整 Tool 历史。
+
+做到这些，就进入 **session:03 · Full Session History**。
