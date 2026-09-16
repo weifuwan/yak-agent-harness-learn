@@ -24,6 +24,7 @@
     "tool:06": "node --env-file=.env --import tsx mvp/02-tool/06-multiple-tools/index.ts",
     "tool:07": "node --env-file=.env --import tsx mvp/02-tool/07-unified-tool-interface/index.ts",
     "agent-loop:01": "node --env-file=.env --import tsx mvp/03-agent-loop/01-manual-two-step/index.ts",
+    "agent-loop:02": "node --env-file=.env --import tsx mvp/03-agent-loop/02-basic-loop/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
