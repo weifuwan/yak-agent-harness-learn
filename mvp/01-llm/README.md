@@ -27,19 +27,27 @@ npm run llm:01 -- "用一句话解释 HashMap"
 npm run llm:01 -- "Java 中 ArrayList 和 LinkedList 有什么区别？"
 ```
 
-### 02 Message Roles
+### 02 Message Roles / Persona Comparison
 
 ```bash
 npm run llm:02 -- "解释一下 HashMap"
 ```
 
-也可以保持 User Prompt 不变，只修改 `02-message-roles/index.ts` 里的 `SYSTEM_PROMPT`，再运行同一个命令观察回答变化。
+这条命令会保持 **User Prompt 完全相同**，连续用 3 个不同的 System Prompt 调用模型：
+
+```text
+资深 Java 工程师
+初学者老师
+Java 面试官
+```
+
+因此一次运行会发出 3 次模型请求。重点不是比较“谁回答得更好”，而是观察：**System Prompt 中定义的 persona 不同，模型输出的术语深度、表达方式、关注重点会发生什么变化。**
 
 ---
 
 ## 运行后重点观察什么
 
-01 和 02 现在都会把一次调用的完整过程打印出来。
+01 和 02 都会把一次调用的完整过程打印出来。
 
 ```text
 Request URL
@@ -55,8 +63,6 @@ Response Headers
 Raw Response Body
 ↓
 Parsed Payload
-↓
-First Choice
 ↓
 Assistant Message
 ↓
@@ -97,7 +103,7 @@ stream    → 当前要求一次性返回，而不是流式返回
   "messages": [
     {
       "role": "system",
-      "content": "你是一个专业的 Java 编程助手..."
+      "content": "你是一名资深 Java 工程师..."
     },
     {
       "role": "user",
@@ -107,7 +113,23 @@ stream    → 当前要求一次性返回，而不是流式返回
 }
 ```
 
-这里重点观察：**System Prompt 和 User Prompt 最终都进入了 `messages`，只是 role 不同。**
+下一次请求里，`user` 完全不变，只替换 `system`：
+
+```text
+System A：资深 Java 工程师
+System B：初学者老师
+System C：Java 面试官
+```
+
+这里要特别区分两个概念：
+
+```text
+system / user / assistant
+= 消息角色（message role）
+
+Java 工程师 / 初学者老师 / 面试官
+= System Prompt 定义的人设（persona）
+```
 
 ### 再重点看完整 Payload
 
@@ -244,14 +266,36 @@ Assistant
 “模型的回答”
 ```
 
+这一步专门做一个控制变量实验：
+
+```text
+User Prompt：解释一下 HashMap
+```
+
+保持不变，只替换 System Prompt：
+
+```text
+① 资深 Java 工程师
+   → 更容易强调实现原理、专业术语、工程实践
+
+② 初学者老师
+   → 更容易使用简单语言、类比、循序渐进的解释
+
+③ Java 面试官
+   → 更容易突出高频面试点、关键区别、追问方向
+```
+
+注意：这不是说 System Prompt 能百分之百控制模型，而是在观察 **System Prompt 如何影响模型的生成倾向**。
+
 学习目标：
 
-- 理解 `system / user / assistant` 三种最基础角色；
+- 理解 `system / user / assistant` 三种最基础消息角色；
 - 理解 System Prompt 是行为约束，不是当前用户任务；
+- 区分 message role 和 persona；
 - 观察 System 和 User 最终如何一起进入 Request Body；
 - 观察返回的 `assistant` role 在完整 payload 中的位置；
-- 观察修改 System Prompt 后，同一个 User Prompt 的输出如何变化；
-- 理解角色化消息为什么比把所有内容拼成一段字符串更容易管理。
+- 用同一个 User Prompt 对比不同 System Prompt 下的输出变化；
+- 理解为什么角色信息和任务信息要分开。
 
 代码：[`02-message-roles/index.ts`](./02-message-roles/index.ts)
 
@@ -261,7 +305,21 @@ Assistant
 npm run llm:02 -- "解释一下 HashMap"
 ```
 
-可以直接修改代码里的 `SYSTEM_PROMPT`，例如从 Java 助手改成“面向初学者的老师”，观察同一个 User Prompt 的差异。
+也可以换一个更容易观察差异的问题：
+
+```bash
+npm run llm:02 -- "Java 中为什么重写 equals 时通常也要重写 hashCode？"
+```
+
+运行结束后，重点比较三个回答：
+
+```text
+术语深度有没有变化？
+表达方式有没有变化？
+是否出现类比？
+是否出现面试追问点？
+相同知识点被强调的部分是否不同？
+```
 
 ---
 
@@ -299,10 +357,12 @@ Context         ❌
 ### 02 Message Roles
 
 - [ ] 我能解释 System Prompt 和 User Prompt 的区别。
-- [ ] 我能解释 `system / user / assistant` 三种角色。
+- [ ] 我能解释 `system / user / assistant` 三种消息角色。
+- [ ] 我能区分 message role 和 persona。
 - [ ] 我能在 Request Body 中找到 system / user。
 - [ ] 我能在 Response Payload 中找到 assistant。
-- [ ] 我实际修改过 System Prompt，并观察输出变化。
+- [ ] 我实际对比过至少 3 个不同 System Prompt 的回答。
+- [ ] 我能说出 System Prompt 主要改变了回答的哪些方面。
 - [ ] 我理解为什么角色信息和任务信息要分开。
 
 等这两个问题真正熟悉以后，再进入 **03 Multi-turn Messages**。
