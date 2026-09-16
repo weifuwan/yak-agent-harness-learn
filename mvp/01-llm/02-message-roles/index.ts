@@ -9,6 +9,7 @@ if (!apiKey) {
   throw new Error("MODEL_API_KEY is required. Copy .env.example to .env and fill it in.")
 }
 
+const url = `${baseUrl}/chat/completions`
 const messages = [
   {
     role: "system",
@@ -19,47 +20,118 @@ const messages = [
     content: userPrompt,
   },
 ]
+const requestBody = {
+  model,
+  messages,
+  stream: false,
+}
 
-console.log("\n[Messages]")
+console.log("\n========== 02 Message Roles ==========")
+
+console.log("\n[1. System Prompt]")
+console.log(SYSTEM_PROMPT)
+
+console.log("\n[2. User Prompt]")
+console.log(userPrompt)
+
+console.log("\n[3. Messages]")
 console.log(JSON.stringify(messages, null, 2))
 
-const response = await fetch(`${baseUrl}/chat/completions`, {
+console.log("\n[4. Request URL]")
+console.log(url)
+
+console.log("\n[5. Request Headers]")
+console.log(
+  JSON.stringify(
+    {
+      Authorization: "Bearer <redacted>",
+      "Content-Type": "application/json",
+    },
+    null,
+    2,
+  ),
+)
+
+console.log("\n[6. Request Body]")
+console.log(JSON.stringify(requestBody, null, 2))
+
+const response = await fetch(url, {
   method: "POST",
   headers: {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
   },
-  body: JSON.stringify({
-    model,
-    messages,
-    stream: false,
-  }),
+  body: JSON.stringify(requestBody),
 })
 
-const body = await response.text()
+console.log("\n[7. HTTP Response]")
+console.log(
+  JSON.stringify(
+    {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+    },
+    null,
+    2,
+  ),
+)
+
+console.log("\n[8. Response Headers]")
+console.log(JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2))
+
+const rawBody = await response.text()
+
+console.log("\n[9. Raw Response Body]")
+console.log(rawBody)
 
 if (!response.ok) {
-  throw new Error(`Model HTTP ${response.status}: ${body}`)
+  throw new Error(`Model HTTP ${response.status}: ${rawBody}`)
 }
 
-const payload = JSON.parse(body) as {
+const payload = JSON.parse(rawBody) as {
+  id?: string
+  object?: string
+  created?: number
+  model?: string
   choices?: Array<{
+    index?: number
     message?: {
       role?: string
       content?: string | null
     }
+    finish_reason?: string | null
   }>
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    total_tokens?: number
+    [key: string]: unknown
+  }
+  [key: string]: unknown
 }
 
-const assistant = payload.choices?.[0]?.message
-const assistantText = assistant?.content?.trim()
+console.log("\n[10. Parsed Payload]")
+console.log(JSON.stringify(payload, null, 2))
+
+const firstChoice = payload.choices?.[0]
+const assistantMessage = firstChoice?.message
+const assistantText = assistantMessage?.content?.trim()
+
+console.log("\n[11. First Choice]")
+console.log(JSON.stringify(firstChoice ?? null, null, 2))
+
+console.log("\n[12. Assistant Message]")
+console.log(JSON.stringify(assistantMessage ?? null, null, 2))
+
+console.log("\n[13. Assistant Role]")
+console.log(assistantMessage?.role ?? "assistant")
 
 if (!assistantText) {
   throw new Error("Model returned no assistant text")
 }
 
-console.log("\n[Assistant Role]")
-console.log(assistant?.role ?? "assistant")
-
-console.log("\n[Assistant Content]")
+console.log("\n[14. Final Assistant Text]")
 console.log(assistantText)
+
+console.log("\n========== End ==========")
