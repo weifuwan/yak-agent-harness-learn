@@ -8,7 +8,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "mvp:llm": "tsx mvp/01-llm/src/index.ts",
+    "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
+    "test:llm": "node --import tsx --test mvp/01-llm/test/*.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
     "mvp:agent-loop": "tsx mvp/03-agent-loop/src/index.ts",
     "mvp:session": "tsx mvp/04-session/src/index.ts",
