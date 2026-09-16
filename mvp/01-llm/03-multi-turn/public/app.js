@@ -1,7 +1,6 @@
 const messages = []
 
 const messagesElement = document.querySelector("#messages")
-const emptyState = document.querySelector("#emptyState")
 const form = document.querySelector("#chatForm")
 const input = document.querySelector("#promptInput")
 const sendButton = document.querySelector("#sendButton")
@@ -14,11 +13,17 @@ function updateLearningView() {
   statusText.textContent = `浏览器 messages: ${messages.length}`
 }
 
+function removeEmptyState() {
+  messagesElement.querySelector(".empty-state")?.remove()
+}
+
 function scrollToBottom() {
   messagesElement.scrollTop = messagesElement.scrollHeight
 }
 
 function addUserMessage(content) {
+  removeEmptyState()
+
   const row = document.createElement("div")
   row.className = "message-row user-row"
 
@@ -73,14 +78,13 @@ function addThinkingMessage() {
 }
 
 async function sendMessage(content) {
-  emptyState?.remove()
-
   messages.push({ role: "user", content })
   addUserMessage(content)
   updateLearningView()
 
   const pending = addThinkingMessage()
   sendButton.disabled = true
+  clearButton.disabled = true
   input.disabled = true
 
   try {
@@ -107,6 +111,7 @@ async function sendMessage(content) {
     updateLearningView()
   } finally {
     sendButton.disabled = false
+    clearButton.disabled = false
     input.disabled = false
     input.focus()
   }
