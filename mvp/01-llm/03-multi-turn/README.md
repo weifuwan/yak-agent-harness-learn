@@ -1,210 +1,261 @@
-# 03 · Multi-turn Messages · Web Chat
+# 03 · Multi-turn Messages
 
-这个页面只是为了更直观地观察多轮对话和 Markdown 输出。
+> 核心问题：**模型为什么看起来能记住上一轮？**
 
-它不是一个完整聊天产品，也不引入 Session、数据库或缓存。
+这一节只学习一个概念：
 
-## 启动
+> **多轮对话最基础的实现，就是应用把之前的 `user / assistant` 消息重新放进下一次请求的 `messages`。**
 
-第一次运行：
+暂时不学习 Session、数据库、缓存、Token 压缩、Compaction。
 
-```bash
-npm install
-cp .env.example .env
-```
+---
 
-在 `.env` 中填写 `MODEL_API_KEY`。
+## 1. 它处在整个流程什么位置？
 
-启动 Web Chat：
-
-```bash
-npm run llm:03:web
-```
-
-浏览器打开：
+前两节都是单次调用：
 
 ```text
-http://127.0.0.1:3030
+User
+ ↓
+Model
+ ↓
+Assistant
 ```
 
-CLI 对照实验仍然保留：
+这一节开始连续对话：
+
+```text
+Round 1
+User 1
+ ↓
+Model
+ ↓
+Assistant 1
+
+Round 2
+User 1
++
+Assistant 1
++
+User 2
+ ↓
+Model
+ ↓
+Assistant 2
+```
+
+关键不是“模型自己记住了”，而是应用把上一轮重新发送给模型。
+
+---
+
+## 2. 如果不发送历史，会发生什么？
+
+第一轮：
+
+```text
+user:
+请记住：我叫魏福万。
+
+assistant:
+好的，我记住了。
+```
+
+第二轮如果只发送：
+
+```json
+[
+  {
+    "role": "user",
+    "content": "我叫什么？"
+  }
+]
+```
+
+对于模型来说，这就是一次全新的请求。
+
+它没有看到第一轮，自然不知道你之前说过什么。
+
+---
+
+## 3. 带上历史以后呢？
+
+第二轮改成：
+
+```json
+[
+  {
+    "role": "user",
+    "content": "请记住：我叫魏福万。"
+  },
+  {
+    "role": "assistant",
+    "content": "好的，我记住了。"
+  },
+  {
+    "role": "user",
+    "content": "我叫什么？"
+  }
+]
+```
+
+模型这次能看到完整上下文，因此可以继续回答。
+
+所以最基础的多轮对话可以理解成：
+
+```text
+历史消息
++
+当前消息
+↓
+一起重新发送给模型
+```
+
+---
+
+## 4. 为什么 `assistant` 也必须保存？
+
+对话历史不只是用户说过什么，还包括模型之前回答过什么。
+
+例如：
+
+```text
+user:
+HashMap 是什么？
+
+assistant:
+HashMap 是一种基于哈希表实现的 Map。
+
+user:
+那它和 Hashtable 有什么区别？
+```
+
+最后一句里的“它”，依赖前面的 `assistant` 内容才能形成完整上下文。
+
+所以最基础的对话历史是：
+
+```text
+user
+assistant
+user
+assistant
+user
+assistant
+...
+```
+
+---
+
+## 5. 运行实验
+
+运行：
 
 ```bash
 npm run llm:03 -- "我叫什么？"
 ```
 
-## 页面里发生了什么？
+程序会自动做一个对照实验。
 
-浏览器里只有一个普通 JavaScript 数组：
-
-```text
-messages = []
-```
-
-第一次发送：
+### Round 1
 
 ```text
-messages
-↓
-[
-  { role: "user", content: "我叫魏福万，请记住" }
-]
-↓
-POST /api/chat
-↓
-模型回答
-↓
-浏览器追加 assistant
+user:
+请记住：我叫魏福万。
+
+assistant:
+模型确认
 ```
 
-此时浏览器内存变成：
+### Round 2A · 不带历史
 
-```text
-[
-  { role: "user", content: "我叫魏福万，请记住" },
-  { role: "assistant", content: "好的，我记住了。" }
-]
-```
-
-第二次发送“我叫什么？”时，浏览器不是只发送新问题，而是发送：
-
-```text
-[
-  user1,
-  assistant1,
-  user2
-]
-```
-
-后端再加上自己的 System Prompt：
+发送给模型：
 
 ```text
 system
-+
-user1
-+
-assistant1
-+
-user2
-↓
-Model
+user: 我叫什么？
 ```
 
-这就是当前阶段最重要的知识点：
+### Round 2B · 带历史
 
-> **多轮对话最基础的实现，不是模型保存了上一轮，而是应用把历史 messages 重新发给模型。**
-
-## 为什么刷新页面后会消失？
-
-因为当前版本故意没有：
+发送给模型：
 
 ```text
-数据库        ❌
-localStorage  ❌
-sessionStorage ❌
-Redis         ❌
-服务端 Session ❌
+system
+user: 请记住：我叫魏福万
+assistant: 第一轮模型回答
+user: 我叫什么？
 ```
 
-历史只存在浏览器当前页面的 `messages` 数组里。
+重点比较 2A 和 2B。
 
-所以：
+两次请求唯一关键差异就是：
+
+> **有没有把上一轮 `user + assistant` 重新放进 `messages`。**
+
+代码：[`index.ts`](./index.ts)
+
+---
+
+## 6. 当前代码只打印关键信息
+
+01 / 02 已经观察过完整 HTTP Request / Response，所以这一节不再打印所有细节。
+
+只观察：
 
 ```text
-刷新页面
-↓
-JavaScript 重新加载
-↓
-messages = []
-↓
-对话消失
+Round 1
+├── user
+└── assistant
+
+Round 2A
+├── 实际发送的 messages
+└── assistant
+
+Round 2B
+├── 实际发送的 messages
+└── assistant
 ```
 
-这正是当前想观察的效果。
+当前真正重要的是 `messages` 如何变化。
 
-## 前后端职责
+---
+
+## 7. 当前不要解决的问题
+
+学完这一节，很自然会出现下一个问题：
 
 ```text
-Browser
-├── 展示 user / assistant
-├── 保存当前页面内的 messages
-├── 每轮把完整 messages 发给后端
-└── 展示 Markdown
-
-POST /api/chat
+每聊一轮
 ↓
-Node Server
-├── 校验 messages
-├── 添加 System Prompt
-├── 调用模型
-├── 取出 assistant content
-├── Markdown → HTML
-└── 返回 assistant
+messages 增加
+↓
+历史越来越长
 ```
 
-后端本身不保存历史。
+但现在先不要解决。
 
-## Markdown
-
-Assistant 原始返回仍然保存为 Markdown：
-
-```json
-{
-  "role": "assistant",
-  "content": "## 标题\n\n```java\n...\n```"
-}
-```
-
-为了浏览器展示方便，后端同时使用 `markdown-it` 渲染 HTML。
-
-`html: false`，所以模型返回的原始 HTML 不会直接作为可信 HTML 执行。
-
-## Learning View
-
-页面右侧会实时显示当前浏览器里的 `messages`。
-
-例如：
-
-```json
-[
-  {
-    "role": "user",
-    "content": "HashMap 是什么？"
-  },
-  {
-    "role": "assistant",
-    "content": "HashMap 是..."
-  },
-  {
-    "role": "user",
-    "content": "那它线程安全吗？"
-  }
-]
-```
-
-这个区域比聊天气泡更重要。
-
-每发送一轮，都观察一次它是怎么增长的。
-
-## 当前不要解决
+下面这些都留到后面：
 
 ```text
-Streaming        ❌
-持久化 Session   ❌
-Token Budget     ❌
-Compaction       ❌
-Tool             ❌
-Agent Loop       ❌
+Streaming         ❌
+Token / Context   ❌
+Session           ❌
+数据库持久化      ❌
+Compaction        ❌
+Memory            ❌
+Tool              ❌
+Agent Loop        ❌
 ```
 
-现在只理解：
+现在只确认：**多轮对话为什么能成立。**
 
-```text
-浏览器内存中的 History
-+
-当前 User Message
-↓
-每轮重新发送
-↓
-产生 Multi-turn Conversation
-```
+---
+
+## Done
+
+- [ ] 我知道第二轮调用本身仍然是一次新的模型请求。
+- [ ] 我能解释为什么不带历史时，模型不知道第一轮发生过什么。
+- [ ] 我能解释为什么要把 `user1 + assistant1` 重新加入第二轮 `messages`。
+- [ ] 我理解 `assistant` 是历史上下文的一部分。
+- [ ] 我能解释最基础的 Multi-turn Conversation 是怎么工作的。
+
+如果这些能不用看代码解释清楚，这一节就完成了。
