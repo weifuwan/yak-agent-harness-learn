@@ -4,6 +4,39 @@
 
 当前原则：**没有遇到问题之前，不提前引入答案。**
 
+## 快速测试
+
+第一次运行：
+
+```bash
+npm install
+cp .env.example .env
+```
+
+在 `.env` 中填写 `MODEL_API_KEY` 后，可以直接复制下面的命令测试。
+
+### 01 Basic Call
+
+```bash
+npm run llm:01 -- "用一句话解释 HashMap"
+```
+
+也可以换一个问题：
+
+```bash
+npm run llm:01 -- "Java 中 ArrayList 和 LinkedList 有什么区别？"
+```
+
+### 02 Message Roles
+
+```bash
+npm run llm:02 -- "解释一下 HashMap"
+```
+
+也可以保持 User Prompt 不变，只修改 `02-message-roles/index.ts` 里的 `SYSTEM_PROMPT`，再运行同一个命令观察回答变化。
+
+---
+
 ## 学习路线
 
 ```text
