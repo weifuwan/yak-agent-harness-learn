@@ -24,12 +24,12 @@ npm run tool:02
 
 ### Tool 03 · Model Chooses Tool
 
-需要 `.env` 中已经配置 Kimi：
+这一节复用前面 LLM 学习阶段的 DeepSeek 配置：
 
 ```env
-KIMI_API_KEY=
-KIMI_BASE_URL=https://api.moonshot.cn/v1
-KIMI_MODEL=kimi-k2.6
+MODEL_API_KEY=
+MODEL_BASE_URL=https://api.deepseek.com
+MODEL_NAME=deepseek-flash
 ```
 
 先测试一个需要工具的问题：
@@ -166,7 +166,7 @@ User Prompt
 +
 Tool Schema
 ↓
-Kimi
+DeepSeek
 ↓
 模型决定
 ├── 直接回答
@@ -211,7 +211,7 @@ Tool Function
 +
 Tool Schema
 ↓
-Schema 发给模型
+Schema 发给 DeepSeek
 ↓
 模型选择 Tool
 ↓
@@ -253,15 +253,19 @@ add(123, 456)
 
 真正执行 Tool 的仍然必须是我们的应用程序。
 
-所以自然进入下一步：
+另外，模型生成的参数不是可信输入。真正执行前需要：
 
 ```text
-Tool 03
-模型告诉程序“想调用什么”
+解析
 ↓
-Tool 04
-程序真正执行这个 Tool
+校验 Tool name
+↓
+校验 arguments
+↓
+再执行
 ```
+
+这个边界会在 `tool:04` 正式处理。
 
 ---
 
@@ -286,6 +290,7 @@ Tool 04
 - [ ] 我能找到 `message.tool_calls[]`。
 - [ ] 我能找到 `function.name`。
 - [ ] 我能解析 `function.arguments`。
+- [ ] 我知道模型生成的 Tool Call 在执行前必须校验。
 - [ ] 我知道 Tool Call 只是调用意图，不代表 Tool 已经执行。
 - [ ] 我实际对比过“需要 add”和“不需要 add”的两个问题。
 
