@@ -8,6 +8,40 @@
 
 ---
 
+## 快速测试
+
+### Tool 01 · Local Function
+
+```bash
+npm run tool:01
+```
+
+也可以传参数：
+
+```bash
+npm run tool:01 -- 12 34
+```
+
+### Tool 02 · Tool Schema
+
+```bash
+npm run tool:02
+```
+
+这一轮没有 LLM，只观察：
+
+```text
+add()
+= 真正可执行的函数
+
+Tool Schema
+= 给模型看的结构化说明书
+```
+
+独立说明：[`02-tool-schema/README.md`](./02-tool-schema/README.md)
+
+---
+
 ## 学习路线
 
 ```text
@@ -29,13 +63,13 @@
 当前进度：
 
 ```text
-01 Local Function        ← 当前
-02 Tool Schema           ← 后续
-03 Model Chooses Tool    ← 后续
-04 Execute Tool          ← 后续
-05 Tool Result → Model   ← 后续
-06 Multiple Tools        ← 后续
-07 Unified Tool Interface← 后续
+01 Local Function         ✅
+02 Tool Schema            ← 当前
+03 Model Chooses Tool     ← 后续
+04 Execute Tool           ← 后续
+05 Tool Result → Model    ← 后续
+06 Multiple Tools         ← 后续
+07 Unified Tool Interface ← 后续
 ```
 
 ---
@@ -44,21 +78,17 @@
 
 核心问题：**Tool 到底是什么？**
 
-这一节先完全不接 LLM。
+先理解成：
 
-先把 Tool 理解成：
+> **Tool = 程序可以执行的一项能力。**
 
-> **程序可以执行的一项能力。**
-
-当前只实现：
+当前实现：
 
 ```ts
 function add(a: number, b: number) {
   return a + b
 }
 ```
-
-执行链路：
 
 ```text
 Input
@@ -68,105 +98,135 @@ Execute
 Output
 ```
 
-例如：
-
-```text
-123
-456
-↓
-add(123, 456)
-↓
-579
-```
-
 运行：
 
 ```bash
-npm run tool:01
+npm run tool:01 -- 123 456
 ```
-
-也可以传入自己的数字：
-
-```bash
-npm run tool:01 -- 12 34
-```
-
-代码：[`01-local-function/index.ts`](./01-local-function/index.ts)
 
 详细说明：[`01-local-function/README.md`](./01-local-function/README.md)
 
 ---
 
-## 为什么第一轮不接 LLM？
+# Tool 02 · Tool Schema
 
-因为 Tool 本身并不是 AI 专属概念。
+核心问题：**模型怎么知道 Tool 叫什么、做什么、需要哪些参数？**
 
-```text
-普通函数
-HTTP API
-数据库查询
-文件操作
-```
-
-都可以成为 Tool 的底层能力。
-
-当前只需要把这件事看清楚：
+这一轮给 `add()` 增加一份结构化说明：
 
 ```text
-Tool
-= executable capability
-= 一个可以执行并得到结果的能力
-```
-
-现在还没有：
-
-```text
-Tool Schema       ❌
-Model Tool Call   ❌
-Tool Result       ❌
-Tool Registry     ❌
-Agent Loop        ❌
-```
-
----
-
-## 下一步为什么是 Tool Schema？
-
-程序员知道：
-
-```ts
-add(a, b)
-```
-
-但是模型不知道：
-
-```text
-add 是什么？
-什么时候应该用？
-需要哪些参数？
-参数类型是什么？
-```
-
-所以自然会进入：
-
-```text
-Tool 01
-先有一个可以执行的能力
+name
 ↓
-Tool 02
-再给这个能力一份模型能理解的说明书
+Tool 名字
+
+description
+↓
+Tool 是做什么的
+
+parameters
+↓
+有哪些参数
+
+type
+↓
+参数是什么类型
+
+required
+↓
+哪些参数必须提供
 ```
 
-也就是 **Tool Schema**。
+当前 Schema 大致是：
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "add",
+    "description": "计算两个数字之和。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "a": { "type": "number" },
+        "b": { "type": "number" }
+      },
+      "required": ["a", "b"],
+      "additionalProperties": false
+    }
+  }
+}
+```
+
+最重要的是区分：
+
+```text
+add()
+= 给程序执行
+
+addToolSchema
+= 给模型理解
+```
+
+Schema 本身不会执行函数。
+
+运行：
+
+```bash
+npm run tool:02
+```
+
+代码：[`02-tool-schema/index.ts`](./02-tool-schema/index.ts)
+
+详细说明：[`02-tool-schema/README.md`](./02-tool-schema/README.md)
 
 ---
 
-## Tool 01 Done 标准
+## 下一步为什么是 Model Chooses Tool？
+
+现在已经有：
+
+```text
+add()
++
+add Tool Schema
+```
+
+但模型还没看到这份 Schema。
+
+下一步才会真正把 Schema 发给 LLM，然后观察：
+
+```text
+User:
+帮我算 123 + 456
+
+↓
+LLM 看到了 add Tool Schema
+
+↓
+模型是否会返回：
+Tool Call
+name = add
+arguments = { a: 123, b: 456 }
+```
+
+这一阶段先只观察模型的选择，仍然可以不执行 `add()`。
+
+---
+
+## 当前 Done 标准
+
+### Tool 01
 
 - [ ] 我能用自己的话解释 Tool 是什么。
 - [ ] 我知道 Tool 最基础可以只是普通函数。
 - [ ] 我能解释 Input / Execute / Output。
-- [ ] 我知道当前还没有 LLM 参与。
-- [ ] 我知道为什么下一步需要 Tool Schema。
 
-做到这些，就进入 **tool:02 · Tool Schema**。
+### Tool 02
+
+- [ ] 我能解释 Tool Schema 是什么。
+- [ ] 我知道 Function 和 Schema 的职责不同。
+- [ ] 我能解释 `name / description / parameters / required`。
+- [ ] 我知道 Schema 只是描述，不负责执行。
+- [ ] 我知道当前还没有把 Schema 发给 LLM。
+
+做到这些，就进入 **tool:03 · Model Chooses Tool**。
