@@ -41,8 +41,8 @@ Integration 仍然沿用同一个原则：
 ```text
 01 Agent Skeleton                    ✅
 02 Read → Think → Answer             ✅
-03 Read → Edit → Permission → Write  ← 当前
-04 Multi-Step Coding Loop            ← 后续
+03 Read → Edit → Permission → Write  ✅
+04 Multi-Step Coding Loop            ← 当前
 05 Session / Context / Recovery      ← 后续
 06 Minimal Coding Agent Runtime      ← 后续
 ```
@@ -54,8 +54,6 @@ Integration 仍然沿用同一个原则：
 ```bash
 npm run integration:01
 ```
-
-只接：
 
 ```text
 User Prompt
@@ -97,8 +95,6 @@ LLM
 Answer
 ```
 
-只允许一次读取，不提前进入完整 Agent Loop。
-
 ```text
 02 = Inspect
 ```
@@ -109,26 +105,14 @@ Answer
 
 # 03 · Read → Edit → Permission → Write
 
-核心问题：
-
-> **Agent 已经会读文件以后，怎样安全地让它真的修改文件？**
-
-运行：
-
 ```bash
 npm run integration:03
 ```
 
-完整链路：
+第一次安全地产生文件副作用：
 
 ```text
-User
-↓
-LLM
-↓
 read_file
-↓
-真实文件内容
 ↓
 LLM
 ↓
@@ -136,53 +120,17 @@ write_file Tool Call
 ↓
 Permission Runtime
 ↓
-allow / ask / deny
+approve / reject
 ↓
-Tool Execution
-↓
-LLM
-↓
-Answer
+真正写入 / 不写入
 ```
 
-默认 `write_file` 会命中：
-
-```text
-ask
-```
-
-所以：
+关键边界：
 
 ```text
 Tool Call
 ≠
 Tool Execution
-```
-
-模型只能提出写入意图，Runtime 拥有最终执行权。
-
-默认 Demo 会分别验证：
-
-```text
-reject
-→ 文件不变
-
-approve
-→ 文件真正改成 port = 8080
-```
-
-这一轮还把读写范围统一到：
-
-```text
-workspaceRoot
-```
-
-并增加硬边界：
-
-```text
-outside workspace → deny
-write_file inside → ask
-.env → deny
 ```
 
 ```text
@@ -193,62 +141,157 @@ write_file inside → ask
 
 ---
 
-## 为什么下一步是 Multi-Step Coding Loop？
+# 04 · Multi-Step Coding Loop
 
-现在流程还是写死的：
+核心问题：
+
+> **为什么真实 Coding Agent 的下一步不能继续由 Runtime 写死？**
+
+运行：
+
+```bash
+npm run integration:04
+```
+
+这一轮把固定流程：
 
 ```text
-read once
+read
 ↓
-write once
+write
 ↓
 answer
 ```
 
-但真实 Coding Agent 可能需要：
+改成真正循环：
 
 ```text
-read A
+LLM
 ↓
-read B
+Tool Call ?
+├── read_file
+├── write_file
+├── run_test
+└── no tool → final answer
 ↓
-write A
+Tool Result
 ↓
-write B
-↓
-run_test
-↓
-失败
-↓
-继续修改
-```
-
-这时候就不能再手写：
-
-```text
-Turn 1 = read
-Turn 2 = write
-Turn 3 = answer
-```
-
-需要真正恢复：
-
-```text
-Model
-↓
-Tool
-↓
-Observation
-↓
-Model
+LLM
 ↓
 Continue / Done
+```
+
+第一次在 Integration 中显式维护：
+
+```text
+CodingLoopState
+├── step
+├── maxSteps
+├── messages
+└── trace
+```
+
+### Permission 仍然存在
+
+自由 Loop 不等于自由执行：
+
+```text
+LLM
+↓
+write_file Tool Call
+↓
+Permission Runtime
+↓
+allow / ask / deny
+```
+
+如果是 `ask`，Loop 会暂停成：
+
+```text
+approval_required
+```
+
+外部 approve / reject 后，从原来的 `CodingLoopState` 继续，而不是从头重跑。
+
+### run_test
+
+这一轮新增第三个 Tool：
+
+```text
+run_test
+```
+
+当前它不是任意 Shell，而是固定：
+
+```text
+node --test
+```
+
+测试失败不会直接终止 Agent，而是作为：
+
+```text
+TEST_FAILED
+```
+
+返回模型，模型再决定下一步。
+
+### maxSteps
+
+模型决定：
+
+```text
+想不想继续
+```
+
+Runtime 决定：
+
+```text
+最多允许继续多久
+```
+
+当前 Demo：
+
+```text
+maxSteps = 8
+```
+
+```text
+04 = Loop
+```
+
+详细：[`04-multi-step-coding-loop/README.md`](./04-multi-step-coding-loop/README.md)
+
+---
+
+## 为什么下一步是 Session / Context / Recovery？
+
+现在一个 Run 内已经能：
+
+```text
+读取
+↓
+修改
+↓
+测试
+↓
+根据结果继续
+```
+
+但它仍然主要是“一次运行里的 Agent”。
+
+还缺：
+
+```text
+上一轮发生了什么？
+这一轮模型应该看到哪些历史？
+Context 太长怎么办？
+执行失败以后怎么恢复？
 ```
 
 所以下一轮进入：
 
 ```text
-integration:04 · Multi-Step Coding Loop
+integration:05 · Session / Context / Recovery
 ```
 
 ---
@@ -256,12 +299,13 @@ integration:04 · Multi-Step Coding Loop
 ## 当前明确不进入
 
 ```text
-run_test
-多个文件连续修改
-任意多 Tool Round
-Session 持久化
-Compaction
-Recovery
+Session 持久化接入
+Compaction Runtime 接入
+Recovery Runtime 接入
+进程重启恢复
+Git
+任意 shell
+Sub Agent
 完整 Coding Agent Runtime
 ```
 
@@ -269,15 +313,16 @@ Recovery
 
 ## 当前 Done 标准
 
-### Integration 03
+### Integration 04
 
-- [ ] 我知道 read_file 和 write_file 的风险不同。
+- [ ] 我知道 03 为什么仍然是固定流程。
+- [ ] 我知道 LLM 应根据 Tool Result 决定下一步。
 - [ ] 我知道 Tool Call 不等于 Tool Execution。
-- [ ] 我知道 Permission 必须放在 Tool Call 和 Tool Execution 之间。
-- [ ] 我知道 `ask` 时文件不能提前变化。
-- [ ] 我知道 approve / reject 必须来自 Runtime 外部，而不是 LLM 自己批准自己。
-- [ ] 我知道 workspaceRoot 是读写和 Permission Scope 的共同边界。
-- [ ] 我知道 `01 = Skeleton`、`02 = Inspect`、`03 = Edit`。
-- [ ] 我知道下一步为什么需要真正的 Multi-Step Coding Loop。
+- [ ] 我知道 write_file 在 Loop 中仍然必须经过 Permission。
+- [ ] 我知道 approval_required 为什么要保存 Loop State。
+- [ ] 我知道 TEST_FAILED 应作为 Observation 回给模型。
+- [ ] 我知道 maxSteps 为什么由 Runtime 控制。
+- [ ] 我知道 `01 = Skeleton`、`02 = Inspect`、`03 = Edit`、`04 = Loop`。
+- [ ] 我知道下一步为什么需要 Session / Context / Recovery。
 
-做到这些，就进入 **integration:04 · Multi-Step Coding Loop**。
+做到这些，就进入 **integration:05 · Session / Context / Recovery**。
