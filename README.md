@@ -281,12 +281,12 @@ mvp/xx-name/
 [x] 02 Tool
 [x] 03 Agent Loop
 [x] 04 Session
-[ ] 05 Context        ← next
-[ ] 06 Compaction
+[x] 05 Context
+[ ] 06 Compaction     ← next
 [ ] 07 Permission
 [ ] 08 Recovery
 ```
 
-当前进入 **05 · Context MVP**。
+当前进入 **06 · Compaction MVP**。
 
 > 不是为了更快写出 Agent，而是为了真正知道 Agent 为什么这样工作。
