@@ -30,8 +30,8 @@
 01 No Session            ✅
 02 In-Memory Session     ✅
 03 Full Session History  ✅
-04 Multiple Sessions     ← 当前
-05 Persist Session       ← 后续
+04 Multiple Sessions     ✅
+05 Persist Session       ← 当前
 06 Resume Session        ← 后续
 ```
 
@@ -66,8 +66,6 @@ Run #2
 ↓
 继续使用上一轮历史
 ```
-
-所以：
 
 > **Agent Loop 管一次 Run；Session 管多个 Run 之间的连续历史。**
 
@@ -107,8 +105,6 @@ type Session = {
 }
 ```
 
-运行：
-
 ```bash
 npm run session:02
 ```
@@ -117,11 +113,10 @@ npm run session:02
 
 > **模型并没有自己记住，而是应用保存历史，再在下一次 Run 时重新传给模型。**
 
-但这一轮只保存：
+可以记成：
 
 ```text
-user
-assistant(final)
+02 = Memory
 ```
 
 详细说明：[`02-in-memory-session/README.md`](./02-in-memory-session/README.md)
@@ -132,7 +127,7 @@ assistant(final)
 
 核心问题：**只保存聊天最终文本，真的等于保存了 Agent 完整历史吗？**
 
-这一轮把 Session Message 扩展为：
+Session 扩展为完整事实历史：
 
 ```text
 user
@@ -141,21 +136,18 @@ tool(result)
 assistant(final)
 ```
 
-运行：
-
 ```bash
 npm run session:03
 ```
 
-所以这一轮开始：
+从这一轮开始：
 
 > **Session 不再只是聊天记录，而是 Agent 真正发生过的事实历史。**
 
 可以记成：
 
 ```text
-02 = 记住对话
-03 = 记住真正发生过什么
+03 = History
 ```
 
 详细说明：[`03-full-session-history/README.md`](./03-full-session-history/README.md)
@@ -166,7 +158,7 @@ npm run session:03
 
 核心问题：**已经有完整历史以后，多段不同会话怎么避免串线？**
 
-这一轮第一次给 Session 增加 Identity：
+第一次给 Session 增加 Identity：
 
 ```ts
 type Session = {
@@ -175,126 +167,179 @@ type Session = {
 }
 ```
 
-并引入最小内存 Store：
+并引入：
 
 ```ts
 type SessionStore = Map<string, Session>
 ```
 
-Runtime 入口现在会显式接收：
-
-```ts
-runAgentInSession({
-  sessionStore,
-  sessionId,
-  prompt,
-  tools,
-  maxSteps,
-})
-```
-
-内部流程：
+Runtime 通过：
 
 ```text
 sessionId
 ↓
 getOrCreateSession()
 ↓
-只读取这一份 Session.history
+只读取这一份历史
 ↓
-运行 Agent
-↓
-只更新这一份 Session.history
+只更新这一份历史
 ```
-
-运行：
 
 ```bash
 npm run session:04
 ```
 
-默认场景：
+默认会验证：
 
 ```text
-session-a
-→ 记住 AAA-111
-
-session-b
-→ 记住 BBB-222
+session-a → AAA-111
+session-b → BBB-222
 ```
 
-随后分别追问：
+两份历史互不污染。
+
+可以记成：
 
 ```text
-session-a
-→ AAA-111
-
-session-b
-→ BBB-222
-```
-
-程序还会直接检查历史：
-
-```text
-session-a contains BBB-222: false
-session-b contains AAA-111: false
-```
-
-这一轮最重要的认识：
-
-```text
-03 = History
 04 = Identity
 ```
-
-也就是：
-
-> **History 记录发生了什么，Identity 说明这些历史属于哪一个 Session。**
 
 详细说明：[`04-multiple-sessions/README.md`](./04-multiple-sessions/README.md)
 
 ---
 
-## 为什么下一步是 Persist Session？
+# Session 05 · Persist Session
 
-现在同一个进程里已经可以维护：
+核心问题：**带有 sessionId 的完整历史，程序退出以后怎么留下？**
 
-```text
-session-a
-session-b
-session-c
-...
-```
-
-而且它们互不污染。
-
-但 `SessionStore` 仍然只是：
+`session:04` 的 Store 只是：
 
 ```ts
 new Map<string, Session>()
 ```
 
+进程结束以后全部消失。
+
+这一轮第一次引入最小文件持久化：
+
+```text
+Session
+↓
+saveSession()
+↓
+JSON
+↓
+.sessions/session-a.json
+```
+
+以及反向过程：
+
+```text
+.sessions/session-a.json
+↓
+loadSession()
+↓
+Session
+↓
+new Map()
+```
+
+运行：
+
+```bash
+npm run session:05
+```
+
+默认场景会先运行一个真实 Agent Run，并保存完整历史：
+
+```text
+user
+assistant(tool_call)
+tool(result)
+assistant(final)
+```
+
+随后模拟新进程：
+
+```text
+Process #2 Store = new Map()
+↓
+size = 0
+↓
+loadSession("session-a")
+↓
+size = 1
+```
+
+并验证保存前、加载后的 Tool Result 完全一致。
+
+这一轮最重要的边界：
+
+```text
+session:05
+= Persistence
+= 历史能保存 / 能加载
+```
+
+但是加载回来以后，还没有继续执行 Agent。
+
 所以：
 
 ```text
-程序运行中
-→ Session 都还在
-
-程序退出
-→ 整个 Store 消失
+04 = Identity
+05 = Persistence
+06 = Resume
 ```
+
+详细说明：[`05-persist-session/README.md`](./05-persist-session/README.md)
+
+---
+
+## 为什么下一步是 Resume Session？
+
+现在已经可以：
+
+```text
+Run #1
+↓
+Session
+↓
+saveSession()
+↓
+程序结束
+
+新进程
+↓
+loadSession()
+↓
+历史重新出现
+```
+
+但是新的问题是：
+
+> **历史加载回来以后，怎么把它重新接到 Agent Runtime 上，继续下一轮对话？**
 
 下一轮进入：
 
 ```text
-session:05 · Persist Session
+session:06 · Resume Session
 ```
 
-解决：
+目标会是：
 
-> **这些带有 sessionId 的完整历史，怎么从内存真正保存到磁盘？**
+```text
+loadSession(sessionId)
+↓
+恢复 Session
+↓
+用户继续输入
+↓
+Agent 基于旧历史继续运行
+↓
+再次保存
+```
 
-暂时仍然不做数据库、Context 裁剪、Compaction。
+这一轮暂时不进入 Context 裁剪、Compaction、数据库或复杂存储工程。
 
 ---
 
@@ -316,12 +361,18 @@ session:05 · Persist Session
 
 ### Session 04
 
-- [ ] 我能解释为什么一份全局 Session 会导致串话。
 - [ ] 我知道 `sessionId` 是 Session Identity。
-- [ ] 我能解释 `Map<string, Session>` 的作用。
-- [ ] 我知道 Runtime 为什么必须先通过 sessionId 找到对应 Session。
-- [ ] 我能验证 session-a / session-b 的历史互不污染。
-- [ ] 我知道当前多个 Session 仍然只存在于内存。
-- [ ] 我知道下一步为什么需要 Persist Session。
+- [ ] 我能解释 `Map<string, Session>`。
+- [ ] 我知道多个 Session 为什么必须隔离。
 
-做到这些，就进入 **session:05 · Persist Session**。
+### Session 05
+
+- [ ] 我知道内存 Store 为什么不能跨进程存在。
+- [ ] 我能解释 `saveSession()`。
+- [ ] 我能解释 `loadSession()`。
+- [ ] 我知道保存的是完整 Session，而不是聊天摘要。
+- [ ] 我知道新进程的 Store 可以从 JSON 重新构建。
+- [ ] 我能区分 Persistence 和 Resume。
+- [ ] 我知道下一步为什么需要 Resume Session。
+
+做到这些，就进入 **session:06 · Resume Session**。
