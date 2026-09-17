@@ -50,8 +50,8 @@ Tool Execution
 01 No Permission              ✅
 02 Allow / Deny               ✅
 03 Ask Before Execute         ✅
-04 Resource Scope             ← 当前
-05 Policy Precedence          ← 后续
+04 Resource Scope             ✅
+05 Policy Precedence          ← 当前
 06 Minimal Permission Runtime ← 后续
 ```
 
@@ -96,10 +96,6 @@ Permission Gate
 └── deny  → blocked
 ```
 
-核心认识：
-
-> **模型负责提出动作，Runtime 拥有最终执行权。**
-
 ```text
 02 = Gate
 ```
@@ -120,20 +116,14 @@ Permission 扩成：
 allow / ask / deny
 ```
 
-`ask` 的关键：
+`ask` 第一次让 Runtime 出现：
 
 ```text
-Tool Call
-↓
-ask
-↓
 approval_required
 ↓
-Tool 暂停执行
+等待外部 approve / reject
 ↓
-approve / reject
-↓
-execute / blocked
+再决定 execute / blocked
 ```
 
 模型不能自己批准自己的 Tool Call。
@@ -148,102 +138,26 @@ execute / blocked
 
 # 04 · Resource Scope
 
-核心问题：
-
-> **同一个 Tool，操作不同 Resource 时，真的应该得到同一个 Permission Decision 吗？**
-
-运行：
-
 ```bash
 npm run permission:04
 ```
 
-前面主要看：
+Permission 不再只看 Tool Name，还开始看：
 
 ```text
-Tool Name
-```
-
-这一轮第一次加入：
-
-```text
-Tool Name
-+
 Tool Arguments
 +
 Resource Path
 ```
 
-当前只做最小 Scope：
+当前最小 Scope：
 
 ```text
-workspace 内
-→ allow
-
-workspace 外
-→ deny
+workspace 内  → allow
+workspace 外  → deny
 ```
 
-流程：
-
-```text
-Tool Call
-↓
-读取 arguments.path
-↓
-resolve / relative
-↓
-Resource Scope
-↓
-├── inside  → allow → execute
-└── outside → deny  → blocked
-```
-
-默认验证使用同一个 `write_file`：
-
-```text
-Case A
-write_file(workspace/src/inside.txt)
-→ allow
-→ 文件出现
-
-Case B
-write_file(workspace 外的 outside.txt)
-→ deny
-→ 文件不存在
-```
-
-真正改变 Permission Decision 的不是 Tool，而是：
-
-```text
-arguments.path
-```
-
-这一轮最重要的区别：
-
-```text
-Capability
-= write_file
-
-Resource
-= 这次 write_file 真正操作的 path
-```
-
-所以：
-
-> **Permission 不只要问“用什么 Tool”，还要问“这个 Tool 要操作什么 Resource”。**
-
-当前实现使用：
-
-```text
-path.resolve()
-+
-path.relative()
-```
-
-判断 Resource 是否真正位于 workspace 内，而不是简单字符串 `startsWith()`。
-
-同时，Permission 检查得到的规范化 Resource Path 也会用于真正的 Tool Execution，避免“检查 A、实际执行 B”。
+所以同一个 `write_file`，因为 path 不同，可以得到不同 Permission Decision。
 
 ```text
 04 = Scope
@@ -253,7 +167,106 @@ path.relative()
 
 ---
 
-## 四轮连起来
+# 05 · Policy Precedence
+
+核心问题：
+
+> **一次 Tool Call 同时命中多条 Permission Rule 时，最终到底听谁的？**
+
+运行：
+
+```bash
+npm run permission:05
+```
+
+这一轮第一次把 Permission 拆成：
+
+```text
+matchRules()
+= 哪些规则命中
+
+resolveDecision()
+= 命中以后最终谁赢
+```
+
+当前学习版人为规定：
+
+```text
+deny > ask > allow
+```
+
+默认 Policy：
+
+```text
+workspace:inside → allow
+write_file       → ask
+.env             → deny
+```
+
+默认验证：
+
+```text
+Case A
+read_file(workspace/notes.txt)
+↓
+只命中 allow
+↓
+final = allow
+↓
+Tool 执行
+```
+
+```text
+Case B
+write_file(workspace/src/app.txt)
+↓
+allow + ask
+↓
+ask > allow
+↓
+final = ask
+↓
+approval_required
+↓
+Tool 不执行
+```
+
+```text
+Case C
+write_file(workspace/.env)
+↓
+allow + ask + deny
+↓
+deny > ask > allow
+↓
+final = deny
+↓
+blocked
+↓
+Tool 不执行
+```
+
+这一轮真正建立：
+
+> **Permission Rule 可以有很多条，但一次 Tool Call 最终必须收敛成一个 Decision。**
+
+注意：
+
+```text
+deny > ask > allow
+```
+
+只是当前学习 MVP 的简单策略，不代表所有成熟系统都必须这么设计。
+
+```text
+05 = Policy
+```
+
+详细：[`05-policy-precedence/README.md`](./05-policy-precedence/README.md)
+
+---
+
+## 五轮连起来
 
 ```text
 01 = Unrestricted
@@ -267,70 +280,73 @@ ask + 外部批准
 
 04 = Scope
 权限开始关注具体 Resource
+
+05 = Policy
+多条 Rule 命中后收敛成一个 Decision
+```
+
+也可以这样理解：
+
+```text
+04 Scope
+= 哪些规则可能命中
+
+05 Policy
+= 命中多条以后最终听谁的
 ```
 
 ---
 
-## 为什么下一步是 Policy Precedence？
+## 为什么下一步是 Minimal Permission Runtime？
 
-现在我们只有一条很纯的 Scope 规则：
-
-```text
-workspace 内  → allow
-workspace 外  → deny
-```
-
-下一步如果加入：
+现在能力已经散成：
 
 ```text
-write_file → ask
-workspace/** → allow
-.env → deny
+Gate
+Approval
+Scope
+Rule Match
+Policy Resolution
 ```
 
-就会出现：
-
-```text
-一次 Tool Call
-同时命中多条规则
-↓
-最终到底听谁的？
-```
+调用方如果自己组织这些步骤，会越来越乱。
 
 所以下一轮进入：
 
 ```text
-permission:05 · Policy Precedence
+permission:06 · Minimal Permission Runtime
 ```
 
-研究多个 Permission Rule 冲突时如何得到最终 Decision。
+把这些能力收成一个统一入口，让 Agent Runtime 不需要理解 Permission 内部细节。
 
 ---
 
 ## 当前仍然不进入
 
 ```text
-复杂 RBAC
+复杂 Rule DSL
+RBAC
 OS Sandbox
 容器隔离
 企业审批流
 网络权限
-符号链接完整安全模型
+审批持久化
+完整符号链接安全模型
 ```
 
 ---
 
 ## 当前 Done 标准
 
-### Permission 04
+### Permission 05
 
-- [ ] 我能区分 Capability 和 Resource。
-- [ ] 我知道同一个 Tool 可以因为参数不同得到不同 Permission Decision。
-- [ ] 我知道 Resource Scope 必须发生在 Tool Execution 之前。
-- [ ] 我知道 workspace 外被 deny 后不能产生副作用。
-- [ ] 我知道路径 Scope 不能只用字符串前缀判断。
-- [ ] 我知道 Permission 检查的 Resource 和 Tool 真正执行的 Resource 应保持一致。
-- [ ] 我知道 `03 = Approval`，`04 = Scope`。
-- [ ] 我知道下一步为什么需要 Policy Precedence。
+- [ ] 我知道一条 Tool Call 可以同时命中多条 Rule。
+- [ ] 我能区分 Rule Match 和 Policy Resolution。
+- [ ] 我知道当前 MVP 的优先级是 `deny > ask > allow`。
+- [ ] 我知道这个优先级只是当前学习设计，不是通用标准。
+- [ ] 我知道最终只能得到一个 Permission Decision。
+- [ ] 我知道 `ask / deny` 时 Tool 不能提前产生副作用。
+- [ ] 我知道 `04 = Scope`，`05 = Policy`。
+- [ ] 我知道下一步为什么需要 Minimal Permission Runtime。
 
-做到这些，就进入 **permission:05 · Policy Precedence**。
+做到这些，就进入 **permission:06 · Minimal Permission Runtime**。
