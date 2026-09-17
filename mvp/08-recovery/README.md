@@ -2,7 +2,7 @@
 
 > 核心问题：**模型失败、Tool 失败、进程退出、代码改坏以后怎么办？**
 
-当前状态：`LEARNING`
+状态：`COMPLETE`
 
 核心边界：
 
@@ -29,28 +29,12 @@ Recovery
 ## 学习路线
 
 ```text
-01 No Recovery
-   ↓
-02 Retry
-   ↓
-03 Run State
-   ↓
-04 Checkpoint / Snapshot
-   ↓
-05 Resume / Rollback
-   ↓
-06 Minimal Recovery Runtime
-```
-
-当前进度：
-
-```text
 01 No Recovery                 ✅
 02 Retry                       ✅
 03 Run State                   ✅
 04 Checkpoint / Snapshot       ✅
-05 Resume / Rollback           ← 当前
-06 Minimal Recovery Runtime    ← 后续
+05 Resume / Rollback           ✅
+06 Minimal Recovery Runtime    ✅
 ```
 
 ---
@@ -61,7 +45,15 @@ Recovery
 npm run recovery:01
 ```
 
-失败后没有恢复状态，天真地整段重跑会重复已经成功的副作用。
+故意让 Run 执行到一半失败，并观察：
+
+```text
+已成功副作用仍然存在
++
+Runtime 不知道从哪里继续
++
+从头重跑可能重复副作用
+```
 
 ```text
 01 = Failure
@@ -77,13 +69,15 @@ npm run recovery:01
 npm run recovery:02
 ```
 
-只解决：
+第一次引入：
 
 ```text
 当前 Operation 失败
 ↓
 有限次再试
 ```
+
+Retry 只解决当前 Step 的临时失败。
 
 ```text
 02 = Retry
@@ -99,7 +93,7 @@ npm run recovery:02
 npm run recovery:03
 ```
 
-第一次记录整个 Run：
+第一次记录：
 
 ```text
 run status
@@ -108,7 +102,14 @@ lastError
 steps[]
 ```
 
-所以 Runtime 第一次知道做到哪一步。
+所以 Runtime 第一次知道：
+
+```text
+做到哪一步
+哪些成功
+哪一步失败
+哪些还没执行
+```
 
 ```text
 03 = State
@@ -152,68 +153,30 @@ Snapshot
 
 # 05 · Resume / Rollback
 
-核心问题：
-
-> **已经有 Run State 和 Checkpoint 以后，失败时到底是继续往前，还是回到之前的安全状态？**
-
-运行：
-
 ```bash
 npm run recovery:05
 ```
 
-这一轮第一次真正做恢复。
-
-## Resume
+第一次真正恢复：
 
 ```text
-Step 1 success
-Step 2 success
-Step 3 failed
-Step 4 pending
-
-↓ Resume
-
-跳过 Step 1 / 2
-重新执行 Step 3
-继续 Step 4
+Resume
+= 跳过 success Step，从 failed Step 继续
 ```
-
-关键：
-
-> **已经 success 的 Step 不应重复执行。**
-
-默认实验会验证 A / B 在 Resume 前后都只写入一次。
-
-## Rollback
 
 ```text
-Checkpoint:
-A = OLD-A
-B = OLD-B
-
-Current:
-A = NEW-A
-B = NEW-B
-
-↓ Rollback
-
-A = OLD-A
-B = OLD-B
+Rollback
+= 使用 Checkpoint 把副作用恢复到旧状态
 ```
 
-Rollback 不继续 Run，而是使用 Checkpoint 恢复文件世界。
-
-当前学习版 Rollback 后，原来的 failed Run 仍保持 failed；这里只恢复副作用状态，不伪造执行成功。
-
-### Retry / Resume / Rollback
+三个概念边界：
 
 ```text
 Retry
-= 当前这一步再试
+= 当前 Step 再试
 
 Resume
-= 从失败点继续整个 Run
+= 整个 Run 从失败点继续
 
 Rollback
 = 回到之前的安全状态
@@ -227,30 +190,59 @@ Rollback
 
 ---
 
-## 五轮连起来
+# 06 · Minimal Recovery Runtime
 
-```text
-01 = Failure
-失败直接结束
-
-02 = Retry
-同一步有限次再试
-
-03 = State
-知道整个 Run 做到哪
-
-04 = Checkpoint
-保存恢复所需的旧世界状态
-
-05 = Recover
-真正 Resume / Rollback
+```bash
+npm run recovery:06
 ```
 
----
+这一轮不再增加新概念，只把前面的能力收口成：
 
-## 为什么下一步是 Minimal Recovery Runtime？
+```ts
+const runtime = createRecoveryRuntime({
+  runId,
+  steps,
+  snapshotFiles,
+})
 
-现在能力还是分散的：
+await runtime.run()
+await runtime.resume()
+await runtime.rollback()
+```
+
+内部统一负责：
+
+```text
+Checkpoint
+Run State
+Retry
+Resume
+Rollback
+```
+
+流程：
+
+```text
+run()
+↓
+Create Checkpoint
+↓
+Create Run State
+↓
+Execute Steps + Retry
+↓
+success / failed
+
+failed
+↓
+├── resume()
+│   → 从 failed Step 继续
+│
+└── rollback()
+    → 恢复 Checkpoint
+```
+
+调用方不再需要自己编排：
 
 ```text
 retryOperation()
@@ -261,17 +253,54 @@ resumeRun()
 rollbackCheckpoint()
 ```
 
-下一轮：
-
 ```text
-recovery:06 · Minimal Recovery Runtime
+06 = Runtime
 ```
 
-会把 Retry / State / Checkpoint / Resume / Rollback 收成统一入口，让 Agent Runtime 不需要自己编排恢复细节。
+详细：[`06-minimal-recovery-runtime/README.md`](./06-minimal-recovery-runtime/README.md)
 
 ---
 
-## 当前仍然不进入
+## 六轮连起来
+
+```text
+01 = Failure
+失败已经发生
+
+02 = Retry
+当前 Step 再试
+
+03 = State
+知道整个 Run 做到哪
+
+04 = Checkpoint
+保存恢复材料
+
+05 = Recover
+真正 Resume / Rollback
+
+06 = Runtime
+统一封装恢复流程
+```
+
+一句话：
+
+> **Recovery Runtime 解决的不是“怎么避免失败”，而是“失败以后怎么记录、怎么重试、怎么继续、怎么回到安全状态”。**
+
+---
+
+## 当前明确缺陷
+
+当前学习版仍然只存在内存里：
+
+```text
+进程退出
+↓
+Run State 丢失
+Checkpoint 丢失
+```
+
+暂时不进入：
 
 ```text
 Run State 持久化
@@ -284,18 +313,19 @@ Saga
 自动恢复策略
 ```
 
+这些属于后续成熟 Recovery Engineering，而不是当前最小概念链路。
+
 ---
 
-## 当前 Done 标准
+## Recovery Done 标准
 
-### Recovery 05
+- [ ] 我能区分 Failure / Retry / State / Checkpoint / Recover / Runtime。
+- [ ] 我知道 Retry 和 Resume 不一样。
+- [ ] 我知道 Run State 和 Snapshot 不一样。
+- [ ] 我知道 Resume 为什么必须跳过 success Step。
+- [ ] 我知道 Rollback 为什么必须依赖 Checkpoint。
+- [ ] 我知道 Rollback 不代表原 Run 自动 success。
+- [ ] 我知道 Agent Runtime 不应自己编排 Recovery 内部函数。
+- [ ] 我知道当前 MVP 为什么还不能跨进程恢复。
 
-- [ ] 我能区分 Retry、Resume、Rollback。
-- [ ] 我知道 Resume 应跳过已经 success 的 Step。
-- [ ] 我知道 Resume 的目的是避免重复已经成功的副作用。
-- [ ] 我知道 Rollback 依赖 Checkpoint / Snapshot。
-- [ ] 我知道 Rollback 恢复世界状态，不等于 Run 自动变成 success。
-- [ ] 我知道 `04 = Checkpoint`，`05 = Recover`。
-- [ ] 我知道下一步为什么要收成 Minimal Recovery Runtime。
-
-做到这些，就进入 **recovery:06 · Minimal Recovery Runtime**。
+做到这些，**08 · Recovery MVP COMPLETE**。
