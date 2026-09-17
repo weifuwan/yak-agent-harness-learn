@@ -1,16 +1,14 @@
 # Yak Agent Harness Learn
 
-> 用 OpenCode 等成熟开源项目学习 Agent Engineering：先理解问题，再做最小实现，最后回到源码验证理解。
+> 用成熟 Agent 项目学习 Agent Engineering：先理解问题，再做最小实现，最后回到源码验证理解。
 
-这个仓库不是为了快速做出一个 Agent Demo，也不是 Yakable 的开发分支。
+这个仓库不是为了快速做出一个 Agent Demo。
 
-它只做一件事：**把 Agent Engineering 拆成一个个可以真正理解、亲手验证的节点。**
+它只做一件事：**把 Agent Engineering 拆成可以真正理解、亲手验证的节点，再把它们重新组合起来。**
 
 ---
 
 ## 学习原则
-
-每个节点都固定走：
 
 ```text
 理解问题
@@ -30,7 +28,7 @@
 
 ---
 
-## 第一阶段 · Core MVP
+# 第一阶段 · Core MVP · COMPLETE
 
 ```text
 [x] 01 LLM
@@ -58,27 +56,29 @@ Recovery   → Retry / State / Checkpoint / Resume / Rollback
 
 ---
 
-## 第二阶段 · Integration · Mini Coding Agent
-
-学习问题：**已经分别理解的能力，怎样真正组合成一个 Coding Agent？**
-
-学习路线：
+# 第二阶段 · Integration · Mini Coding Agent · COMPLETE
 
 ```text
-01 Agent Skeleton
-   ↓
-02 Read → Think → Answer
-   ↓
-03 Read → Edit → Permission → Write
-   ↓
-04 Multi-Step Coding Loop
-   ↓
-05 Session / Context / Recovery
-   ↓
-06 Minimal Coding Agent Runtime
+[x] 01 Agent Skeleton
+[x] 02 Read → Think → Answer
+[x] 03 Read → Edit → Permission → Write
+[x] 04 Multi-Step Coding Loop
+[x] 05 Session / Context / Recovery
+[x] 06 Minimal Coding Agent Runtime
 ```
 
-当前目录：
+记忆方式：
+
+```text
+01 = Skeleton
+02 = Inspect
+03 = Edit
+04 = Loop
+05 = Continuity
+06 = Runtime
+```
+
+目录：
 
 ```text
 integration/
@@ -87,14 +87,21 @@ integration/
 ├── 03-read-edit-permission-write/
 ├── 04-multi-step-coding-loop/
 ├── 05-session-context-recovery/
+├── 06-minimal-coding-agent-runtime/
 └── src/
 ```
 
+详细：[`integration/README.md`](./integration/README.md)
+
 ---
 
-## 当前主链
+## 最终主链
 
 ```text
+User Prompt
+↓
+MiniCodingAgentRuntime
+↓
 Session
 ↓
 Context Runtime
@@ -116,7 +123,7 @@ CodingLoopState
 Continue / Done / Recovery Required
 ```
 
-Recovery 现在分成两个方向：
+Recovery：
 
 ```text
 Resume
@@ -126,35 +133,78 @@ Rollback
 = 使用 Run 开始前的 Checkpoint 恢复工作区
 ```
 
-只有完整 `Done` Run 才会写回 Session。
+Session：
 
-所以 Session 保持：
+```text
+只有完整 Done Run 才 Commit
+```
+
+所以它保存的是：
 
 > **完整事实边界，而不是半截执行日志。**
 
-详细：[`integration/README.md`](./integration/README.md)
+---
+
+## 最终 Runtime API
+
+```ts
+const agent = createMiniCodingAgentRuntime({
+  llm,
+  workspaceRoot,
+  snapshotFiles,
+  compaction,
+})
+
+let result = await agent.run({
+  sessionId,
+  prompt,
+})
+```
+
+调用方不再自己创建：
+
+```text
+Tools
+Permission Runtime
+Session Store
+Coding Loop
+Continuity Agent
+```
+
+Runtime 统一装配这些内部能力。
+
+但以下决定仍然显式保留给外部：
+
+```text
+resumeApproval()
+resumeRecovery()
+rollback()
+```
+
+因为：
+
+> **封装复杂度，不等于替用户做授权和恢复决策。**
 
 ---
 
-## 当前进度
+## 当前阶段
+
+第一阶段 Core MVP：`8 / 8 COMPLETE`
+
+第二阶段 Integration：`6 / 6 COMPLETE`
+
+下一步不再继续堆新的最小模块。
+
+更适合进入：
 
 ```text
-[x] Integration 01 · Agent Skeleton
-[x] Integration 02 · Read → Think → Answer
-[x] Integration 03 · Read → Edit → Permission → Write
-[x] Integration 04 · Multi-Step Coding Loop
-[>] Integration 05 · Session / Context / Recovery
-[ ] Integration 06 · Minimal Coding Agent Runtime
-```
-
-当前进入 **Integration 05 · Session / Context / Recovery**。
-
-下一步不再增加新能力，而是最终收口：
-
-```text
-createMiniCodingAgent(...)
+自己的 Mini Coding Agent
 ↓
-agent.run(...)
+对照 OpenCode 等成熟实现
+↓
+解释成熟工程为什么多出那些复杂度
+↓
+把真正需要的能力带回 Yakable
 ```
 
-> 不是为了更快写出 Agent，而是为了真正知道 Agent 为什么这样工作。
+> **把确定性交给 Harness，把不确定性交给 Agent。**
