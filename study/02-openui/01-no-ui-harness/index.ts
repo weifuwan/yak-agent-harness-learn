@@ -145,7 +145,7 @@ function canonicalize(value: unknown): unknown {
 function comparable(value: unknown): string {
   if (value === undefined) return "<missing>"
   if (typeof value === "string") return value.trim()
-  return JSON.stringify(canonicalize(value))
+  return JSON.stringify(canonicalize(value)) ?? String(value)
 }
 
 function readField(observation: RunObservation, field: string): string {
