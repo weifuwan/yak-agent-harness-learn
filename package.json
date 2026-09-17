@@ -43,6 +43,7 @@
     "context:06": "node --env-file=.env --import tsx mvp/05-context/06-minimal-context-runtime/index.ts",
     "compaction:01": "node --env-file=.env --import tsx mvp/06-compaction/01-no-compaction/index.ts",
     "compaction:02": "node --env-file=.env --import tsx mvp/06-compaction/02-compaction-trigger/index.ts",
+    "compaction:03": "node --env-file=.env --import tsx mvp/06-compaction/03-hot-cold-context/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
