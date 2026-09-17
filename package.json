@@ -60,6 +60,7 @@
     "recovery:05": "node --import tsx mvp/08-recovery/05-resume-rollback/index.ts",
     "recovery:06": "node --import tsx mvp/08-recovery/06-minimal-recovery-runtime/index.ts",
     "integration:01": "node --env-file=.env --import tsx integration/01-agent-skeleton/index.ts",
+    "integration:02": "node --env-file=.env --import tsx integration/02-read-think-answer/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
