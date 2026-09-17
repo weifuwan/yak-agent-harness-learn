@@ -36,6 +36,7 @@
     "session:05": "node --env-file=.env --import tsx mvp/04-session/05-persist-session/index.ts",
     "session:06": "node --env-file=.env --import tsx mvp/04-session/06-resume-session/index.ts",
     "context:01": "node --env-file=.env --import tsx mvp/05-context/01-full-session-as-context/index.ts",
+    "context:02": "node --env-file=.env --import tsx mvp/05-context/02-explicit-context-builder/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
