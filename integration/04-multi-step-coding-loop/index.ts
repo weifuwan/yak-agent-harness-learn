@@ -31,12 +31,13 @@ const llm = new DeepSeekToolProvider({
 const systemPrompt = [
   "你是一个最小 Coding Agent。",
   "你可以自行决定下一步调用 read_file、write_file、run_test，或者直接给最终答案。",
+  "可以在同一个 Model Turn 中调用多个彼此独立的工具，例如同时读取多个文件。",
+  "如果后续操作依赖前一个工具的结果，应先等待 Tool Result，再在下一轮决定后续操作。",
   "修改文件前应先读取真实内容。",
   "write_file.content 必须是完整纯文本文件内容，不要使用 Markdown 代码围栏。",
   "修改完成后必须调用 run_test 验证。",
   "如果测试失败，应根据测试结果继续检查和修改，而不是直接宣布完成。",
   "只有 run_test 明确返回 TEST_PASSED 后，才能告诉用户任务完成。",
-  "每一轮最多调用一个工具。",
 ].join("\n")
 
 const prompt = "把 config.ts 里的 port 从 3000 改成 8080，并运行测试确认通过。"
@@ -103,6 +104,7 @@ function printTrace(result: CodingLoopResult): void {
 console.log("========== Integration 04 · Multi-Step Coding Loop ==========")
 console.log(`model               : ${llm.model}`)
 console.log(`prompt              : ${prompt}`)
+console.log("同一个 Model Turn 允许返回多个 Tool Call，Runtime 会逐个处理并补齐 Tool Result。")
 console.log("Demo 会自动 approve 普通 workspace 写入，只为了让 Loop 连续跑完。")
 
 try {
@@ -150,10 +152,11 @@ try {
 
   console.log("\n========== 关键观察 ==========")
   console.log("Runtime 不再预先写死 read → write → answer。")
-  console.log("每一轮 LLM 根据上一轮 Tool Result 自己决定下一步。")
-  console.log("write_file 即使在 Loop 内也必须经过 Permission Runtime。")
+  console.log("一个 Model Turn 可以产生多个 Tool Call；它们会共享同一个 step。")
+  console.log("每个 Tool Call 都必须得到自己的 Tool Result，处理完整批次后才能再次调用 LLM。")
+  console.log("write_file 即使在 Tool Batch 内也必须经过 Permission Runtime。")
   console.log("run_test 是固定能力，不接受任意 shell 命令。")
-  console.log("maxSteps 限制模型最多能继续多少个 Model Turn。")
+  console.log("maxSteps 限制模型最多能继续多少个 Model Turn，而不是 Tool Call 数量。")
   console.log("01 = Skeleton；02 = Inspect；03 = Edit；04 = Loop。")
   console.log("下一节 integration:05 才把 Session / Context / Recovery 接回完整主链。")
 } finally {
