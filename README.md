@@ -283,10 +283,10 @@ mvp/xx-name/
 [x] 04 Session
 [x] 05 Context
 [x] 06 Compaction
-[ ] 07 Permission      ← next
-[ ] 08 Recovery
+[x] 07 Permission
+[ ] 08 Recovery      ← next
 ```
 
-当前进入 **07 · Permission MVP**。
+当前进入 **08 · Recovery MVP**。
 
 > 不是为了更快写出 Agent，而是为了真正知道 Agent 为什么这样工作。
