@@ -1,1 +1,2 @@
-console.log('05 Context MVP is locked until 04 Session is complete.')
+console.log("05 Context is now in learning mode.")
+console.log("Start with: npm run context:01")
