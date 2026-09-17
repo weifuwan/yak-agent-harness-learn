@@ -1,13 +1,14 @@
 import { isAbsolute, relative, resolve, sep } from "node:path"
 import {
   createSessionStore,
+  type Session as StoredSession,
   type SessionStore,
 } from "../../mvp/04-session/04-multiple-sessions/session-store.js"
+import type { PermissionRule } from "../../mvp/07-permission/05-policy-precedence/policy-precedence.js"
 import {
   createPermissionRuntime,
   type ApprovalDecision,
 } from "../../mvp/07-permission/06-minimal-permission-runtime/permission-runtime.js"
-import type { PermissionRule } from "../../mvp/07-permission/05-policy-precedence/policy-precedence.js"
 import type { ToolCapableProvider } from "../02-read-think-answer/tool-capable-provider.js"
 import {
   createIntegrationPermissionRules,
@@ -62,9 +63,7 @@ export type MiniCodingAgentRuntime = {
   rollback(
     pending: ContinuityPendingRecovery | ContinuityPendingApproval,
   ): Promise<ContinuityRollbackResult>
-  getSession(sessionId: string): ReturnType<SessionStore["get"]> extends never
-    ? never
-    : ReturnType<ReturnType<typeof createContinuityAgent>["getSession"]>
+  getSession(sessionId: string): StoredSession
 }
 
 function resolveWorkspacePath(workspaceRoot: string, filePath: string): string {
