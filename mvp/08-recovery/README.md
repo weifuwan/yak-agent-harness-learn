@@ -46,8 +46,8 @@ Recovery
 
 ```text
 01 No Recovery                 ✅
-02 Retry                       ← 当前
-03 Run State                   ← 后续
+02 Retry                       ✅
+03 Run State                   ← 当前
 04 Checkpoint / Snapshot       ← 后续
 05 Resume / Rollback           ← 后续
 06 Minimal Recovery Runtime    ← 后续
@@ -57,8 +57,6 @@ Recovery
 
 # 01 · No Recovery
 
-运行：
-
 ```bash
 npm run recovery:01
 ```
@@ -66,26 +64,12 @@ npm run recovery:01
 故意让：
 
 ```text
-Step 1 · write A  ✅
-Step 2 · write B  ✅
-Step 3 · fail     ❌
+Step 1 success
+Step 2 success
+Step 3 failed
 ```
 
-失败后没有：
-
-```text
-Retry
-Run State
-Checkpoint
-Resume
-Rollback
-```
-
-然后整段从头重跑，A / B 的副作用会重复。
-
-这轮看到：
-
-> **没有 Recovery 时，失败不仅会终止 Run，盲目重跑还可能重复已经成功的副作用。**
+失败后没有恢复状态，只能天真地整段重跑，已成功副作用可能重复。
 
 ```text
 01 = Failure
@@ -97,17 +81,11 @@ Rollback
 
 # 02 · Retry
 
-核心问题：
-
-> **当前这一步只是临时失败，能不能不要立刻结束整个 Run，而是在当前步骤内再试一次？**
-
-运行：
-
 ```bash
 npm run recovery:02
 ```
 
-这一轮第一次引入：
+第一次引入：
 
 ```ts
 retryOperation(operation, {
@@ -115,84 +93,15 @@ retryOperation(operation, {
 })
 ```
 
-### Case A · Temporary Failure
+只解决：
 
 ```text
-attempt 1 → fail
-attempt 2 → fail
-attempt 3 → success
+当前 Operation 失败
+↓
+有限次再试
 ```
 
-结果：
-
-```text
-status   = success
-attempts = 3
-```
-
-说明临时失败可以在当前 Operation 内通过 Retry 恢复。
-
-### Case B · Exhausted Attempts
-
-```text
-attempt 1 → fail
-attempt 2 → fail
-attempt 3 → fail
-```
-
-达到：
-
-```text
-maxAttempts = 3
-```
-
-以后停止：
-
-```text
-status = failed
-```
-
-所以 Retry 不是无限循环。
-
-这一轮最重要的边界：
-
-```text
-Retry
-= 当前这一步再试
-
-Resume
-= 整个 Run 从失败点继续
-```
-
-它们不是一回事。
-
-当前 `retryOperation()` 只知道：
-
-```text
-attempt 1 / 2 / 3
-```
-
-还不知道：
-
-```text
-Step 1 是否成功
-Step 2 是否成功
-整个 Run 失败在哪一步
-下次应该从哪里继续
-```
-
-另外，并不是所有副作用都天然适合 Retry。
-
-例如：
-
-```text
-write_file 已经成功
-只是响应结果丢了
-```
-
-盲目 Retry 可能重复副作用。
-
-这一轮只建立边界，不提前进入 Idempotency。
+它还不知道整个 Run 做到哪里。
 
 ```text
 02 = Retry
@@ -202,7 +111,130 @@ write_file 已经成功
 
 ---
 
-## 前两轮连起来
+# 03 · Run State
+
+核心问题：
+
+> **Retry 只知道当前 Operation 试了几次，整个 Run 到底执行到哪一步，谁来记录？**
+
+运行：
+
+```bash
+npm run recovery:03
+```
+
+这一轮第一次引入：
+
+```ts
+RunState
+```
+
+最小状态：
+
+```text
+runId
+run status
+currentStepId
+lastError
+steps[]
+```
+
+每个 Step 有：
+
+```text
+pending
+running
+success
+failed
+```
+
+默认实验：
+
+```text
+Step 1 · write A
+→ success
+
+Step 2 · write B
+→ success
+
+Step 3 · run test
+→ Retry 2 次
+→ failed
+
+Step 4 · write report
+→ pending
+```
+
+最终：
+
+```text
+run status   = failed
+current step = step-03
+
+step-01 = success
+step-02 = success
+step-03 = failed
+step-04 = pending
+```
+
+所以 Runtime 第一次能回答：
+
+```text
+做到哪一步？
+哪些已经成功？
+哪一步失败？
+哪些还没执行？
+```
+
+### Retry 和 Run State 的区别
+
+```text
+Retry
+= 当前 Step 试了几次
+```
+
+```text
+Run State
+= 整个 Run 现在是什么状态
+```
+
+### Session 和 Run State 也不同
+
+```text
+Session
+= Agent 的完整交互历史
+
+Run State
+= 一次任务执行的步骤状态
+```
+
+当前 `RunState` 只是内存对象：
+
+```text
+进程退出
+↓
+状态仍然会丢
+```
+
+这一轮还不会：
+
+```text
+Resume
+Rollback
+Checkpoint / Snapshot
+自动跳过 success Step
+持久化 Run State
+```
+
+```text
+03 = State
+```
+
+详细：[`03-run-state/README.md`](./03-run-state/README.md)
+
+---
+
+## 三轮连起来
 
 ```text
 01 = Failure
@@ -210,56 +242,55 @@ write_file 已经成功
 
 02 = Retry
 同一步有限次再试
+
+03 = State
+记录整个 Run 执行到哪
 ```
 
 ---
 
-## 为什么下一步是 Run State？
+## 为什么下一步是 Checkpoint / Snapshot？
 
-现在 Retry 已经能处理：
-
-```text
-当前 Operation 的临时失败
-```
-
-但它完全不知道整个 Run 的执行状态。
-
-比如：
+现在已经知道：
 
 ```text
 Step 1 success
 Step 2 success
-Step 3 retry exhausted
-Step 4 pending
+Step 3 failed
 ```
 
-如果没有状态记录，Runtime 仍然无法回答：
+但如果 Step 2 修改了文件，Run State 只能告诉我们：
 
 ```text
-做到哪一步？
-哪些已经成功？
-哪些还没跑？
+Step 2 成功执行过
 ```
 
-所以下一轮进入：
+它不知道：
 
 ```text
-recovery:03 · Run State
+Step 2 执行之前，文件原来是什么内容？
 ```
 
-第一次记录整个 Run 的步骤状态。
+所以即使知道失败在哪，也还没有足够的信息 Rollback。
+
+下一轮进入：
+
+```text
+recovery:04 · Checkpoint / Snapshot
+```
+
+第一次保存“副作用发生前的世界状态”。
 
 ---
 
 ## 当前仍然不进入
 
 ```text
-Checkpoint / Snapshot
 Resume
 Rollback
-Retry Backoff
+持久化 Run State
+复杂 Retry Backoff
 Jitter
-错误分类体系
 Idempotency Key
 事务
 Saga
@@ -269,15 +300,16 @@ Saga
 
 ## 当前 Done 标准
 
-### Recovery 02
+### Recovery 03
 
-- [ ] 我知道 Retry 解决的是当前 Operation 的临时失败。
-- [ ] 我知道 Retry 必须有 `maxAttempts`，不能无限重试。
-- [ ] 我知道超过最大次数后仍然可能失败。
-- [ ] 我知道 Retry 不等于 Resume。
-- [ ] 我知道 Retry 还不知道整个 Run 做到哪一步。
-- [ ] 我知道副作用操作不能因为有 Retry 就默认安全重试。
-- [ ] 我知道 `01 = Failure`，`02 = Retry`。
-- [ ] 我知道下一步为什么需要 Run State。
+- [ ] 我能解释 Retry 和 Run State 的区别。
+- [ ] 我知道 Run State 需要记录 Run 和 Step 两层状态。
+- [ ] 我知道失败后剩余 Step 应保持 pending。
+- [ ] 我能从 Run State 看出当前失败点。
+- [ ] 我知道 Session 不等于 Run State。
+- [ ] 我知道“知道执行到哪”还不等于“已经能 Resume”。
+- [ ] 我知道 Run State 不能恢复文件修改前的内容。
+- [ ] 我知道 `01 = Failure`、`02 = Retry`、`03 = State`。
+- [ ] 我知道下一步为什么需要 Checkpoint / Snapshot。
 
-做到这些，就进入 **recovery:03 · Run State**。
+做到这些，就进入 **recovery:04 · Checkpoint / Snapshot**。
