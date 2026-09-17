@@ -100,6 +100,7 @@ mvp/
 ```text
 integration/
 ├── 01-agent-skeleton/
+├── 02-read-think-answer/
 └── src/
 ```
 
@@ -205,16 +206,20 @@ Yakable 产品能力
 06 Minimal Coding Agent Runtime
 ```
 
-当前先做：
+当前主链：
 
 ```text
 User Prompt
 ↓
-MiniCodingAgent
-↓
 Context Runtime
 ↓
-LLM Provider
+Tool-capable LLM
+↓
+read_file
+↓
+Tool Result
+↓
+LLM
 ↓
 Answer
 ```
@@ -258,14 +263,14 @@ Answer
 第二阶段：
 
 ```text
-[>] Integration 01 · Agent Skeleton
-[ ] Integration 02 · Read → Think → Answer
+[x] Integration 01 · Agent Skeleton
+[>] Integration 02 · Read → Think → Answer
 [ ] Integration 03 · Read → Edit → Permission → Write
 [ ] Integration 04 · Multi-Step Coding Loop
 [ ] Integration 05 · Session / Context / Recovery
 [ ] Integration 06 · Minimal Coding Agent Runtime
 ```
 
-当前进入 **Integration 01 · Agent Skeleton**。
+当前进入 **Integration 02 · Read → Think → Answer**。
 
 > 不是为了更快写出 Agent，而是为了真正知道 Agent 为什么这样工作。
