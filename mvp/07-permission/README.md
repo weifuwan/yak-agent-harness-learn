@@ -14,7 +14,7 @@ Permission
 = 某一次能力调用能不能真正执行
 ```
 
-所以 Permission 的位置是：
+Permission 的位置：
 
 ```text
 LLM
@@ -48,8 +48,8 @@ Tool Execution
 
 ```text
 01 No Permission              ✅
-02 Allow / Deny               ← 当前
-03 Ask Before Execute         ← 后续
+02 Allow / Deny               ✅
+03 Ask Before Execute         ← 当前
 04 Resource Scope             ← 后续
 05 Policy Precedence          ← 后续
 06 Minimal Permission Runtime ← 后续
@@ -57,9 +57,7 @@ Tool Execution
 
 ---
 
-# Permission 01 · No Permission
-
-运行：
+# 01 · No Permission
 
 ```bash
 npm run permission:01
@@ -75,31 +73,7 @@ Tool Call
 execute()
 ```
 
-没有：
-
-```text
-allow
-ask
-deny
-```
-
-默认实验会真实执行一次 `write_file`，证明 Tool Call 会直接变成副作用。
-
-这一轮看到：
-
-> **没有 Permission 时，Agent 的实际能力边界几乎就是 Tool Registry 的能力边界。**
-
-注意：
-
-```text
-参数校验
-≠
-Permission
-```
-
-JSON、path、content 都合法，只代表 Tool 能执行，不代表这次操作应该被允许。
-
-记成：
+没有任何 Permission Check。
 
 ```text
 01 = Unrestricted
@@ -109,104 +83,26 @@ JSON、path、content 都合法，只代表 Tool 能执行，不代表这次操�
 
 ---
 
-# Permission 02 · Allow / Deny
-
-核心问题：
-
-> **Tool 虽然能执行，Runtime 能不能在真正执行之前先做一次权限 Gate？**
-
-运行：
+# 02 · Allow / Deny
 
 ```bash
 npm run permission:02
 ```
 
-这一轮第一次引入：
-
-```ts
-type PermissionDecision = "allow" | "deny"
-```
-
-结构从：
+第一次形成：
 
 ```text
 Tool Call
 ↓
-execute()
-```
-
-变成：
-
-```text
-Tool Call
+Permission Gate
 ↓
-checkPermission()
-↓
-├── allow → execute()
+├── allow → execute
 └── deny  → blocked
 ```
 
-默认用同一个：
+核心认识：
 
-```text
-write_file
-```
-
-跑两个场景。
-
-### Case A · Allow
-
-```text
-write_file
-↓
-allow
-↓
-execute()
-↓
-文件出现
-```
-
-### Case B · Deny
-
-```text
-write_file
-↓
-deny
-↓
-blocked
-↓
-文件不存在
-```
-
-所以这一轮第一次真正建立：
-
-> **模型负责提出 Tool Call，Runtime 决定这个动作能不能真正发生。**
-
-当前 Policy 只看 Tool Name：
-
-```ts
-{
-  write_file: "allow"
-}
-```
-
-或：
-
-```ts
-{
-  write_file: "deny"
-}
-```
-
-如果没有明确规则，当前最小实现默认：
-
-```text
-deny
-```
-
-这一轮还不会看 Tool Arguments，也不会根据路径做不同判断。
-
-记成：
+> **模型负责提出动作，Runtime 拥有最终执行权。**
 
 ```text
 02 = Gate
@@ -216,117 +112,195 @@ deny
 
 ---
 
-## 前两轮连起来
+# 03 · Ask Before Execute
 
-```text
-permission:01
-Tool Call
-↓
-直接执行
+核心问题：
 
-permission:02
-Tool Call
-↓
-Permission Gate
-↓
-allow / deny
-↓
-决定是否执行
+> **有些操作既不适合永远 allow，也不适合永远 deny，能不能先等待外部批准？**
+
+运行：
+
+```bash
+npm run permission:03
 ```
 
-也就是：
+这一轮第一次把 Permission 扩成三态：
 
-```text
-01 = Unrestricted
-02 = Gate
+```ts
+type PermissionDecision =
+  | "allow"
+  | "ask"
+  | "deny"
 ```
 
----
-
-## 为什么下一步是 Ask？
-
-现在只有：
-
-```text
-allow
-deny
-```
-
-很快就会发现它太死。
-
-例如：
-
-```text
-write_file → deny
-```
-
-Coding Agent 基本无法修改代码。
-
-但：
-
-```text
-write_file → allow
-```
-
-又意味着每次写文件都自动执行。
-
-所以自然需要第三种状态：
-
-```text
-ask
-```
-
-下一轮进入：
-
-```text
-permission:03 · Ask Before Execute
-```
-
-形成：
+关键流程：
 
 ```text
 Tool Call
 ↓
 Permission
 ↓
-├── allow → execute
-├── ask   → 等用户批准
-└── deny  → blocked
+├── allow
+│   ↓
+│   execute()
+│
+├── ask
+│   ↓
+│   approval_required
+│   ↓
+│   Tool 暂停执行
+│   ↓
+│   approve / reject
+│   ↓
+│   execute / blocked
+│
+└── deny
+    ↓
+    blocked
 ```
 
-这一轮暂时不提前实现 `ask`。
+`ask` 的关键不是“多一个字符串”，而是 Runtime 第一次出现：
+
+```text
+暂停副作用
+↓
+等待外部决策
+↓
+再恢复
+```
+
+默认验证：
+
+```text
+Case A
+allow
+→ 直接执行
+
+Case B
+ask
+→ approval_required
+→ approve
+→ resume
+→ 执行
+
+Case C
+ask
+→ approval_required
+→ reject
+→ resume
+→ blocked
+```
+
+而且在 `approval_required` 阶段，目标文件必须仍然不存在，证明 Tool 真的没有提前执行。
+
+最重要的边界：
+
+```text
+LLM
+= 提出 Tool Call
+
+Permission Runtime
+= 判断需要审批
+
+User / External Runtime
+= approve / reject
+```
+
+模型不能自己批准自己的 Tool Call。
+
+```text
+03 = Approval
+```
+
+详细：[`03-ask-before-execute/README.md`](./03-ask-before-execute/README.md)
+
+---
+
+## 三轮连起来
+
+```text
+01 Unrestricted
+= 没有权限层
+
+02 Gate
+= allow / deny
+
+03 Approval
+= allow / ask / deny
+```
+
+---
+
+## 为什么下一步是 Resource Scope？
+
+现在 Permission 仍然只看：
+
+```text
+tool name
+```
+
+例如：
+
+```text
+write_file → ask
+```
+
+但很快会发现：
+
+```text
+write_file("./src/App.ts")
+```
+
+和：
+
+```text
+write_file("../other-project/config")
+```
+
+不应该天然得到同一个权限结果。
+
+所以下一轮进入：
+
+```text
+permission:04 · Resource Scope
+```
+
+第一次把：
+
+```text
+Tool Name
++
+Tool Arguments / Resource
+```
+
+一起纳入 Permission Decision。
 
 ---
 
 ## 当前仍然不进入
 
 ```text
-Resource Scope
-Path Policy
 Policy Precedence
 OS Sandbox
 RBAC
 企业审批流
+审批持久化
+复杂 UI
 ```
 
 ---
 
 ## 当前 Done 标准
 
-### Permission 01
+### Permission 03
 
-- [ ] 我知道 Permission 位于 Tool Call 和 Tool Execution 之间。
-- [ ] 我知道没有 Permission 时 Tool Call 会直接产生真实副作用。
-- [ ] 我能区分 Input Validation 和 Permission Decision。
+- [ ] 我能解释 `ask` 和 `allow` 的区别。
+- [ ] 我知道 `ask` 必须先返回 `approval_required`，不能提前执行 Tool。
+- [ ] 我知道 approve 后才可以恢复并执行。
+- [ ] 我知道 reject 后必须 blocked 且没有副作用。
+- [ ] 我知道模型不能自己批准自己的 Tool Call。
+- [ ] 我能解释为什么 Approval 是外部 Runtime / User 的职责。
+- [ ] 我知道 `02 = Gate`，`03 = Approval`。
+- [ ] 我知道下一步为什么需要 Resource Scope。
 
-### Permission 02
-
-- [ ] 我能解释 Permission Gate 为什么存在。
-- [ ] 我能区分 `allow / deny`。
-- [ ] 我知道 deny 必须发生在 Tool Execution 之前。
-- [ ] 我知道 deny 后 Tool 不应该产生任何副作用。
-- [ ] 我知道模型提出 Tool Call，不等于模型拥有最终执行权。
-- [ ] 我知道当前只按 Tool Name 判断，还没有 Resource Scope。
-- [ ] 我知道下一步为什么需要 `ask`。
-
-做到这些，就进入 **permission:03 · Ask Before Execute**。
+做到这些，就进入 **permission:04 · Resource Scope**。
