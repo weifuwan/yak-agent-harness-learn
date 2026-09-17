@@ -22,7 +22,10 @@ import {
   type RebuiltModelContext,
 } from "./rebuild-context.js"
 
-const TOKEN_BUDGET = 2_000
+// 学习 Demo 故意把 Budget 设在“压缩前 Context 大小”以下。
+// 当前固定数据按学习版 characters / 4 估算约 1800+ tokens，
+// 使用 1500 可以稳定触发 Compaction，同时保留压缩后重新落回 Budget 的观察空间。
+const TOKEN_BUDGET = 1_500
 const KEEP_RECENT_UNITS = 10
 const KEEP_HOT_UNITS = 3
 const REQUIRED_FACT = "IMPORTANT-CONSTRAINT-0401"
@@ -188,7 +191,7 @@ const compact = shouldCompact(beforeTokens, TOKEN_BUDGET)
 
 if (!compact) {
   throw new Error(
-    "Demo expected shouldCompact=true. Increase Cold content or lower TOKEN_BUDGET.",
+    `Demo expected shouldCompact=true, but estimated ${beforeTokens} <= budget ${TOKEN_BUDGET}. Lower TOKEN_BUDGET or increase Cold content.`,
   )
 }
 
