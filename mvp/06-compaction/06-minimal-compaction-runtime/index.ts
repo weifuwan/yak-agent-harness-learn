@@ -9,7 +9,9 @@ import {
   type CompactionResult,
 } from "./compaction-runtime.js"
 
-const TOKEN_BUDGET = 2_000
+// 与 compaction:05 保持一致：学习 Demo 的 large case 约为 1800+ tokens。
+// 设为 1500，确保 large case 稳定进入 Compaction；small case 仍然保持 within budget。
+const TOKEN_BUDGET = 1_500
 const KEEP_HOT_UNITS = 3
 const REQUIRED_FACT = "IMPORTANT-CONSTRAINT-0401"
 const RECENT_RESULT = "RECENT-RESULT-0601"
@@ -233,7 +235,9 @@ const largeResult = await compactIfNeeded({
 printResult("Case B · Over Budget", largeResult)
 
 if (!largeResult.compacted) {
-  throw new Error("Demo expected the large Context to be compacted")
+  throw new Error(
+    `Demo expected the large Context to be compacted, but estimated ${largeResult.beforeTokens} <= budget ${TOKEN_BUDGET}.`,
+  )
 }
 
 const answer = await callModel(largeResult.context.messages)
