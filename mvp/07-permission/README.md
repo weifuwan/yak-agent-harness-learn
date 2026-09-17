@@ -47,8 +47,8 @@ Tool Execution
 当前进度：
 
 ```text
-01 No Permission              ← 当前
-02 Allow / Deny               ← 后续
+01 No Permission              ✅
+02 Allow / Deny               ← 当前
 03 Ask Before Execute         ← 后续
 04 Resource Scope             ← 后续
 05 Policy Precedence          ← 后续
@@ -59,17 +59,13 @@ Tool Execution
 
 # Permission 01 · No Permission
 
-核心问题：
-
-> **如果 Tool Call 产生以后 Runtime 直接执行，会发生什么？**
-
 运行：
 
 ```bash
 npm run permission:01
 ```
 
-当前故意没有任何 Permission 设计：
+故意让：
 
 ```text
 Tool Call
@@ -79,42 +75,31 @@ Tool Call
 execute()
 ```
 
-默认实验假设模型已经返回一个：
+没有：
 
 ```text
-write_file
+allow
+ask
+deny
 ```
 
-Runtime 会直接执行它。
+默认实验会真实执行一次 `write_file`，证明 Tool Call 会直接变成副作用。
 
-为了安全，Demo 只写系统临时目录，并在结束后自动清理。
+这一轮看到：
 
-重点观察：
+> **没有 Permission 时，Agent 的实际能力边界几乎就是 Tool Registry 的能力边界。**
+
+注意：
 
 ```text
-permission check   = NONE
-file exists before = false
-↓
-execute()
-↓
-file exists after  = true
+参数校验
+≠
+Permission
 ```
 
-也就是说：
+JSON、path、content 都合法，只代表 Tool 能执行，不代表这次操作应该被允许。
 
-> **Tool Call 已经真正变成了副作用，但中间没有任何权限决策。**
-
-注意：Tool 参数校验不是 Permission。
-
-```text
-JSON 合法
-path 合法
-content 合法
-```
-
-只说明 Tool 能执行，不说明这次操作应该被允许。
-
-这一轮记成：
+记成：
 
 ```text
 01 = Unrestricted
@@ -124,42 +109,200 @@ content 合法
 
 ---
 
-## 为什么下一步是 Allow / Deny？
+# Permission 02 · Allow / Deny
 
-现在运行路径是：
+核心问题：
+
+> **Tool 虽然能执行，Runtime 能不能在真正执行之前先做一次权限 Gate？**
+
+运行：
+
+```bash
+npm run permission:02
+```
+
+这一轮第一次引入：
+
+```ts
+type PermissionDecision = "allow" | "deny"
+```
+
+结构从：
 
 ```text
 Tool Call
 ↓
-直接 Execute
+execute()
 ```
 
-新的问题自然出现：
-
-> **能不能在真正执行之前先做一次 Gate？**
-
-所以下一轮进入：
+变成：
 
 ```text
-permission:02 · Allow / Deny
+Tool Call
+↓
+checkPermission()
+↓
+├── allow → execute()
+└── deny  → blocked
 ```
 
-第一次形成：
+默认用同一个：
 
 ```text
+write_file
+```
+
+跑两个场景。
+
+### Case A · Allow
+
+```text
+write_file
+↓
+allow
+↓
+execute()
+↓
+文件出现
+```
+
+### Case B · Deny
+
+```text
+write_file
+↓
+deny
+↓
+blocked
+↓
+文件不存在
+```
+
+所以这一轮第一次真正建立：
+
+> **模型负责提出 Tool Call，Runtime 决定这个动作能不能真正发生。**
+
+当前 Policy 只看 Tool Name：
+
+```ts
+{
+  write_file: "allow"
+}
+```
+
+或：
+
+```ts
+{
+  write_file: "deny"
+}
+```
+
+如果没有明确规则，当前最小实现默认：
+
+```text
+deny
+```
+
+这一轮还不会看 Tool Arguments，也不会根据路径做不同判断。
+
+记成：
+
+```text
+02 = Gate
+```
+
+详细：[`02-allow-deny/README.md`](./02-allow-deny/README.md)
+
+---
+
+## 前两轮连起来
+
+```text
+permission:01
+Tool Call
+↓
+直接执行
+
+permission:02
 Tool Call
 ↓
 Permission Gate
 ↓
-├── allow → execute
-└── deny  → 不执行
+allow / deny
+↓
+决定是否执行
 ```
 
-暂时不提前加入：
+也就是：
+
+```text
+01 = Unrestricted
+02 = Gate
+```
+
+---
+
+## 为什么下一步是 Ask？
+
+现在只有：
+
+```text
+allow
+deny
+```
+
+很快就会发现它太死。
+
+例如：
+
+```text
+write_file → deny
+```
+
+Coding Agent 基本无法修改代码。
+
+但：
+
+```text
+write_file → allow
+```
+
+又意味着每次写文件都自动执行。
+
+所以自然需要第三种状态：
 
 ```text
 ask
-路径 Scope
+```
+
+下一轮进入：
+
+```text
+permission:03 · Ask Before Execute
+```
+
+形成：
+
+```text
+Tool Call
+↓
+Permission
+↓
+├── allow → execute
+├── ask   → 等用户批准
+└── deny  → blocked
+```
+
+这一轮暂时不提前实现 `ask`。
+
+---
+
+## 当前仍然不进入
+
+```text
+Resource Scope
+Path Policy
 Policy Precedence
 OS Sandbox
 RBAC
@@ -175,7 +318,15 @@ RBAC
 - [ ] 我知道 Permission 位于 Tool Call 和 Tool Execution 之间。
 - [ ] 我知道没有 Permission 时 Tool Call 会直接产生真实副作用。
 - [ ] 我能区分 Input Validation 和 Permission Decision。
-- [ ] 我知道 Tool Registry 有什么能力，不等于每次都应该允许使用。
-- [ ] 我知道下一步为什么需要 Allow / Deny Gate。
 
-做到这些，就进入 **permission:02 · Allow / Deny**。
+### Permission 02
+
+- [ ] 我能解释 Permission Gate 为什么存在。
+- [ ] 我能区分 `allow / deny`。
+- [ ] 我知道 deny 必须发生在 Tool Execution 之前。
+- [ ] 我知道 deny 后 Tool 不应该产生任何副作用。
+- [ ] 我知道模型提出 Tool Call，不等于模型拥有最终执行权。
+- [ ] 我知道当前只按 Tool Name 判断，还没有 Resource Scope。
+- [ ] 我知道下一步为什么需要 `ask`。
+
+做到这些，就进入 **permission:03 · Ask Before Execute**。
