@@ -29,8 +29,8 @@
 ```text
 01 Full Session As Context   ✅
 02 Explicit Context Builder  ✅
-03 Context Sources           ← 当前
-04 History Selection         ← 后续
+03 Context Sources           ✅
+04 History Selection         ← 当前
 05 Safe Context Units        ← 后续
 06 Minimal Context Runtime   ← 后续
 ```
@@ -197,33 +197,6 @@ Project Context ─────┘
 npm run context:03
 ```
 
-默认问题完全相同：
-
-```text
-这个项目使用什么运行时、语言和 TypeScript 执行器？
-```
-
-先只提供：
-
-```text
-System
-Session History
-Current Task
-```
-
-Session History 里只有之前关于 Session / Agent Loop 的讨论，没有项目技术栈事实。
-
-再加入：
-
-```text
-Project Context
-- Node >=22
-- TypeScript 5.9
-- tsx 4.20
-```
-
-当前 Task 没变，变化的只有 Context Source。
-
 这一轮最重要的认识：
 
 > **Context 不等于聊天历史，而是完成本轮任务所需要的多种信息源的组合。**
@@ -240,7 +213,89 @@ Session 只是其中一个 Source。
 
 ---
 
-## 三轮先连起来
+# Context 04 · History Selection
+
+核心问题：**Session History 很长以后，这一轮到底应该选择哪些历史进入 Context？**
+
+这一轮第一次引入最小 Selection Policy：
+
+```ts
+type HistorySelectionPolicy =
+  | { type: "all" }
+  | { type: "recent"; maxMessages: number }
+```
+
+运行：
+
+```bash
+npm run context:04
+```
+
+默认 Session 构造：
+
+```text
+20 个历史 Turn
+=
+40 条历史消息
+```
+
+当前任务始终一样：
+
+```text
+请告诉我最近一次出现的 HISTORY 编号
+```
+
+对比两种策略：
+
+```text
+Case A
+all
+↓
+40 条 Session History 全部进入 Context
+```
+
+以及：
+
+```text
+Case B
+recent:6
+↓
+只有最近 6 条 Session History 进入 Context
+```
+
+重点观察：
+
+```text
+session messages
+selected history
+context messages
+prompt_tokens
+answer
+```
+
+Session 本身仍然完整保存 40 条消息。
+
+变化的只是：
+
+```text
+本轮 Context 消费多少历史
+```
+
+所以这一轮第一次真正建立：
+
+> **Session 可以完整保存，而 Context 可以选择性消费。**
+
+可以记成：
+
+```text
+04 = Selection
+```
+
+详细说明：[`04-history-selection/README.md`](./04-history-selection/README.md)
+
+---
+
+## 四轮先连起来
 
 ```text
 context:01
@@ -257,6 +312,11 @@ context:03
 Context Builder 接收多个 Sources
 ↓
 Context 不再等于 Session History
+
+context:04
+History Selection Policy
+↓
+Session 完整保存，但 Context 选择性消费
 ```
 
 也就是：
@@ -265,42 +325,84 @@ Context 不再等于 Session History
 01 = Full Session
 02 = Builder
 03 = Sources
+04 = Selection
 ```
 
 ---
 
-## 为什么下一步是 History Selection？
+## 当前 Selection 的缺陷
 
-现在已经知道 Context 可以来自：
+当前最近历史策略只是：
 
-```text
-System
-Current Task
-Session History
-Project Context
+```ts
+history.slice(-N)
 ```
 
-但 `sessionHistory` 当前仍然是：
+它按“消息数量”直接切。
+
+但真实 Agent History 可能包含：
 
 ```text
-有多少
+user
+assistant(tool_call id=123)
+tool(tool_call_id=123)
+assistant(final)
+```
+
+如果刚好从中间切：
+
+```text
+tool(result)
+assistant(final)
+```
+
+前面的：
+
+```text
+assistant(tool_call)
+```
+
+可能已经丢了。
+
+于是 Context 虽然变短，但结构已经不完整。
+
+这个问题这一轮故意不解决。
+
+---
+
+## 为什么下一步是 Safe Context Units？
+
+现在已经会：
+
+```text
+完整 Session
 ↓
-全部进入 Context
+选择最近 N 条
+↓
+Model Context
 ```
 
-如果 Session 有 100 条、1000 条历史，问题仍然存在。
+新的问题是：
+
+> **历史到底应该按“消息”切，还是按某种完整逻辑单元切？**
 
 所以下一轮进入：
 
 ```text
-context:04 · History Selection
+context:05 · Safe Context Units
 ```
 
-第一次回答：
+专门解决 Tool Call / Tool Result、User Turn 等结构如何成组保留。
 
-> **完整 Session History 中，这一轮到底应该选择哪些历史？**
+暂时仍然不进入：
 
-最小方案先从最简单的 `recent N` 开始，不提前引入 RAG、Embedding、摘要或 Compaction。
+```text
+Compaction
+摘要
+Embedding
+RAG
+复杂 Token Budget
+```
 
 ---
 
@@ -315,15 +417,21 @@ context:04 · History Selection
 
 - [ ] 我能解释 `buildContext()` 为什么存在。
 - [ ] 我知道 Builder 是“发送什么”的独立入口。
-- [ ] 我知道这一轮为什么没有减少 Token。
 
 ### Context 03
 
-- [ ] 我知道 Context 不等于 Session History。
-- [ ] 我能区分 System Prompt / Current Task / Session History / Project Context。
-- [ ] 我知道 Session 只是 Context 的一个 Source。
-- [ ] 我知道 Context Builder 可以组合多个不同来源。
-- [ ] 我知道这一轮仍然没有 History Selection。
-- [ ] 我知道下一步为什么要开始选择历史。
+- [ ] 我知道 Context 可以来自多个 Sources。
+- [ ] 我知道 Session History 只是其中一个 Source。
 
-做到这些，就进入 **context:04 · History Selection**。
+### Context 04
+
+- [ ] 我能解释 History Selection Policy。
+- [ ] 我能区分 `all / recent`。
+- [ ] 我知道 Selection 不等于删除 Session History。
+- [ ] 我知道 Session 可以完整保存，而 Context 只消费一部分。
+- [ ] 我知道最近 N 条可以减少本轮 Context 和 prompt token 消耗。
+- [ ] 我知道 `history.slice(-N)` 只是最小学习实现。
+- [ ] 我知道直接按消息切可能破坏 Tool Call / Tool Result 的结构完整性。
+- [ ] 我知道下一步为什么需要 Safe Context Units。
+
+做到这些，就进入 **context:05 · Safe Context Units**。
