@@ -118,7 +118,7 @@ try {
     step1?.status !== "success" ||
     step2?.status !== "success" ||
     step3?.status !== "failed" ||
-    step3.attempts !== 2 ||
+    step3?.attempts !== 2 ||
     step4?.status !== "pending" ||
     (await exists(reportPath))
   ) {
