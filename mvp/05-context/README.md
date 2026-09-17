@@ -2,7 +2,7 @@
 
 > 核心问题：**Session 保存了全部历史，但这一轮模型到底应该看到什么？**
 
-当前原则：**先让完整 Session 全部进入请求，亲眼看到问题，再让 Context Builder 自然长出来。**
+当前原则：**先让问题暴露，再让 Context Builder、Sources、Selection 一层层自然长出来。**
 
 当前状态：`LEARNING`
 
@@ -28,8 +28,8 @@
 
 ```text
 01 Full Session As Context   ✅
-02 Explicit Context Builder  ← 当前
-03 Context Sources           ← 后续
+02 Explicit Context Builder  ✅
+03 Context Sources           ← 当前
 04 History Selection         ← 后续
 05 Safe Context Units        ← 后续
 06 Minimal Context Runtime   ← 后续
@@ -99,17 +99,15 @@ Session 有多少
 Context 就塞多少
 ```
 
-重点观察：
-
-```text
-session messages
-request messages
-prompt_tokens
-```
-
-这一轮得出的核心问题是：
+这一轮要看到：
 
 > **Session 负责保存，但不应该顺便决定本轮模型看到什么。**
+
+可以记成：
+
+```text
+01 = Full Session
+```
 
 详细说明：[`01-full-session-as-context/README.md`](./01-full-session-as-context/README.md)
 
@@ -119,7 +117,7 @@ prompt_tokens
 
 核心问题：**Session 和 Model Context 怎么在代码里真正分开？**
 
-这一轮第一次引入：
+第一次引入：
 
 ```ts
 buildContext()
@@ -153,105 +151,156 @@ LLM
 npm run context:02
 ```
 
-新增最小类型：
+这一轮行为故意不变：`buildContext()` 仍然全量返回 Session。
 
-```ts
-type ModelContext = {
-  messages: Message[]
-}
-```
-
-调用流程：
-
-```ts
-const context = buildContext({
-  systemMessage,
-  session,
-  currentPrompt,
-})
-
-await callModel(context)
-```
-
-## 为什么行为故意不变？
-
-当前 `buildContext()` 仍然全量返回 Session：
-
-```text
-system
-+
-全部 session.messages
-+
-current user
-```
-
-所以 `0 / 10 / 30` 个旧 Turn 的 `prompt_tokens` 仍然会增长。
-
-这是刻意的。
-
-这一轮只解决：
+所以它没有解决 Token 增长，只解决了职责边界：
 
 > **保存什么，和发送什么，先拥有不同的代码入口。**
-
-还没有解决：
-
-```text
-哪些历史值得选
-Token Budget
-相关性
-历史裁剪
-摘要
-Compaction
-```
 
 可以记成：
 
 ```text
-context:01
-Session = Context
-
-context:02
-Session
-↓
-Context Builder
-↓
-Context
+02 = Builder
 ```
 
 详细说明：[`02-explicit-context-builder/README.md`](./02-explicit-context-builder/README.md)
 
 ---
 
-## 为什么下一步是 Context Sources？
+# Context 03 · Context Sources
 
-现在已经有一个独立入口：
+核心问题：**Context Builder 除了 Session History，还应该从哪里获得信息？**
+
+这一轮第一次明确多个来源：
 
 ```ts
-buildContext(...)
+type ContextSources = {
+  systemPrompt: string
+  currentTask: string
+  sessionHistory: Message[]
+  projectContext?: string
+}
 ```
 
-新的问题变成：
-
-> **Context 除了 Session History，还可能由哪些信息组成？**
-
-例如 Coding Agent 可能需要：
+结构变成：
 
 ```text
-System Prompt
+System Prompt ───────┐
+Current Task ────────┤
+Session History ─────┼→ Context Builder → Model Context → LLM
+Project Context ─────┘
+```
+
+运行：
+
+```bash
+npm run context:03
+```
+
+默认问题完全相同：
+
+```text
+这个项目使用什么运行时、语言和 TypeScript 执行器？
+```
+
+先只提供：
+
+```text
+System
+Session History
+Current Task
+```
+
+Session History 里只有之前关于 Session / Agent Loop 的讨论，没有项目技术栈事实。
+
+再加入：
+
+```text
+Project Context
+- Node >=22
+- TypeScript 5.9
+- tsx 4.20
+```
+
+当前 Task 没变，变化的只有 Context Source。
+
+这一轮最重要的认识：
+
+> **Context 不等于聊天历史，而是完成本轮任务所需要的多种信息源的组合。**
+
+Session 只是其中一个 Source。
+
+可以记成：
+
+```text
+03 = Sources
+```
+
+详细说明：[`03-context-sources/README.md`](./03-context-sources/README.md)
+
+---
+
+## 三轮先连起来
+
+```text
+context:01
+Session 全部直接进入 LLM
+↓
+发现保存历史 ≠ 合理输入
+
+context:02
+加入 Context Builder
+↓
+让“本轮输入”有独立构建入口
+
+context:03
+Context Builder 接收多个 Sources
+↓
+Context 不再等于 Session History
+```
+
+也就是：
+
+```text
+01 = Full Session
+02 = Builder
+03 = Sources
+```
+
+---
+
+## 为什么下一步是 History Selection？
+
+现在已经知道 Context 可以来自：
+
+```text
+System
 Current Task
 Session History
-Project Information
-Tool Result
-Working Directory
+Project Context
 ```
+
+但 `sessionHistory` 当前仍然是：
+
+```text
+有多少
+↓
+全部进入 Context
+```
+
+如果 Session 有 100 条、1000 条历史，问题仍然存在。
 
 所以下一轮进入：
 
 ```text
-context:03 · Context Sources
+context:04 · History Selection
 ```
 
-先把不同信息源拆清楚，再谈如何选择历史。
+第一次回答：
+
+> **完整 Session History 中，这一轮到底应该选择哪些历史？**
+
+最小方案先从最简单的 `recent N` 开始，不提前引入 RAG、Embedding、摘要或 Compaction。
 
 ---
 
@@ -261,16 +310,20 @@ context:03 · Context Sources
 
 - [ ] 我能区分 Session 和 Context。
 - [ ] 我知道完整 Session 不应该天然等于本轮 Context。
-- [ ] 我知道无关旧历史也会占用请求 Token。
 
 ### Context 02
 
 - [ ] 我能解释 `buildContext()` 为什么存在。
-- [ ] 我能解释 `ModelContext`。
-- [ ] 我知道 LLM 现在只消费最终 Context，不需要知道 Session 如何保存。
+- [ ] 我知道 Builder 是“发送什么”的独立入口。
 - [ ] 我知道这一轮为什么没有减少 Token。
-- [ ] 我知道 Builder 当前仍然全量返回 Session。
-- [ ] 我知道后续 Context 逻辑应该长在 Builder 一侧，而不是 Session 持久化层。
-- [ ] 我知道下一步为什么要研究 Context Sources。
 
-做到这些，就进入 **context:03 · Context Sources**。
+### Context 03
+
+- [ ] 我知道 Context 不等于 Session History。
+- [ ] 我能区分 System Prompt / Current Task / Session History / Project Context。
+- [ ] 我知道 Session 只是 Context 的一个 Source。
+- [ ] 我知道 Context Builder 可以组合多个不同来源。
+- [ ] 我知道这一轮仍然没有 History Selection。
+- [ ] 我知道下一步为什么要开始选择历史。
+
+做到这些，就进入 **context:04 · History Selection**。
