@@ -64,6 +64,7 @@
     "integration:03": "node --env-file=.env --import tsx integration/03-read-edit-permission-write/index.ts",
     "integration:04": "node --env-file=.env --import tsx integration/04-multi-step-coding-loop/index.ts",
     "integration:05": "node --env-file=.env --import tsx integration/05-session-context-recovery/index.ts",
+    "integration:06": "node --env-file=.env --import tsx integration/06-minimal-coding-agent-runtime/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
