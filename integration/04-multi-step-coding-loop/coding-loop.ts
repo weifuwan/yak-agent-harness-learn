@@ -2,6 +2,7 @@ import type { Tool } from "../../mvp/02-tool/07-unified-tool-interface/types.js"
 import type {
   ModelMessage,
   Session,
+  SessionMessage,
   ToolCall,
 } from "../../mvp/05-context/06-minimal-context-runtime/types.js"
 import { prepareContext } from "../../mvp/05-context/06-minimal-context-runtime/context-runtime.js"
@@ -27,6 +28,7 @@ export type CodingLoopOptions = {
 export type CodingLoopInput = {
   prompt: string
   session?: Session
+  maxSteps?: number
 }
 
 export type CodingToolTrace = {
@@ -42,6 +44,7 @@ export type CodingLoopState = {
   maxSteps: number
   messages: ModelMessage[]
   trace: CodingToolTrace[]
+  runStartMessageIndex: number
 }
 
 export type PendingCodingApproval = {
@@ -51,33 +54,47 @@ export type PendingCodingApproval = {
   remainingToolCalls: ToolCall[]
 }
 
+export type PendingStoppedCodingRun = {
+  state: CodingLoopState
+  remainingToolCalls: ToolCall[]
+}
+
+type CodingLoopBaseResult = {
+  steps: number
+  trace: CodingToolTrace[]
+  runMessages: SessionMessage[]
+}
+
 export type CodingLoopResult =
-  | {
+  | (CodingLoopBaseResult & {
       status: "done"
       reason: "final_answer"
       answer: string
-      steps: number
-      trace: CodingToolTrace[]
-    }
-  | {
+    })
+  | (CodingLoopBaseResult & {
       status: "approval_required"
       request: PermissionApprovalRequest
       pending: PendingCodingApproval
-      steps: number
-      trace: CodingToolTrace[]
-    }
-  | {
+    })
+  | (CodingLoopBaseResult & {
       status: "stopped"
       reason: "max_steps"
-      steps: number
-      trace: CodingToolTrace[]
-    }
+      pending: PendingStoppedCodingRun
+    })
 
 export type MultiStepCodingAgent = {
   start(input: CodingLoopInput): Promise<CodingLoopResult>
+  startFromMessages(
+    messages: ModelMessage[],
+    maxSteps?: number,
+  ): Promise<CodingLoopResult>
   resume(
     pending: PendingCodingApproval,
     approval: ApprovalDecision,
+  ): Promise<CodingLoopResult>
+  resumeStopped(
+    pending: PendingStoppedCodingRun,
+    additionalSteps: number,
   ): Promise<CodingLoopResult>
 }
 
@@ -141,6 +158,61 @@ function appendToolObservation(
   })
 }
 
+function getRunMessages(state: CodingLoopState): SessionMessage[] {
+  return state.messages.slice(state.runStartMessageIndex) as SessionMessage[]
+}
+
+function baseResult(state: CodingLoopState): CodingLoopBaseResult {
+  return {
+    steps: state.step,
+    trace: [...state.trace],
+    runMessages: getRunMessages(state),
+  }
+}
+
+function stoppedResult(
+  state: CodingLoopState,
+  remainingToolCalls: ToolCall[] = [],
+): CodingLoopResult {
+  return {
+    ...baseResult(state),
+    status: "stopped",
+    reason: "max_steps",
+    pending: {
+      state,
+      remainingToolCalls: [...remainingToolCalls],
+    },
+  }
+}
+
+function createState(
+  messages: ModelMessage[],
+  maxSteps: number,
+): CodingLoopState {
+  validateMaxSteps(maxSteps)
+
+  const first = messages[0]
+  const last = messages.at(-1)
+
+  if (!first || first.role !== "system") {
+    throw new Error("Coding Loop messages must start with a system message")
+  }
+
+  if (!last || last.role !== "user") {
+    throw new Error("Coding Loop messages must end with the current user task")
+  }
+
+  return {
+    step: 0,
+    maxSteps,
+    messages: [...messages],
+    trace: [],
+    // prepareContext / compactIfNeeded 都保证当前 Task 是最后一条 user。
+    // Session 只需要回写这一条 user 以及它之后新产生的 assistant / tool。
+    runStartMessageIndex: messages.length - 1,
+  }
+}
+
 export function createMultiStepCodingAgent(
   options: CodingLoopOptions,
 ): MultiStepCodingAgent {
@@ -172,9 +244,6 @@ export function createMultiStepCodingAgent(
               request: permissionResult.request,
               state,
               toolCall,
-              // 同一 Assistant Message 里的其余 Tool Call 还没有对应 Tool Result。
-              // approve / reject 当前 write 后，必须继续把这一批处理完，
-              // 才能进入下一次 LLM Turn。
               remainingToolCalls: toolCalls.slice(index + 1),
             },
           }
@@ -219,45 +288,55 @@ export function createMultiStepCodingAgent(
 
       if (toolCalls.length === 0) {
         return {
+          ...baseResult(state),
           status: "done",
           reason: "final_answer",
           answer: requireFinalAnswer(response.message.content),
-          steps: state.step,
-          trace: [...state.trace],
         }
       }
 
-      // maxSteps 统计 Model Turn，不统计同一 Turn 里的 Tool Call 数量。
-      // 如果最后一个 Model Turn 又提出一批 Tool Call，则整批都不执行，
-      // 避免超过模型步数以后继续产生副作用。
+      // 最后一个 Model Turn 产生的 Tool Call 当前不执行，避免 maxSteps 之外继续产生副作用。
+      // 但把这批 Tool Call 留在 PendingStoppedCodingRun 里，Integration 05 可以从这里 Resume，
+      // 而不是重新执行前面的 Tool。
       if (state.step >= state.maxSteps) {
-        return {
-          status: "stopped",
-          reason: "max_steps",
-          steps: state.step,
-          trace: [...state.trace],
-        }
+        return stoppedResult(state, toolCalls)
       }
 
       const batchResult = await processToolBatch(state, toolCalls)
 
       if (batchResult.status === "approval_required") {
         return {
+          ...baseResult(state),
           status: "approval_required",
           request: batchResult.request,
           pending: batchResult.pending,
-          steps: state.step,
-          trace: [...state.trace],
         }
       }
     }
 
-    return {
-      status: "stopped",
-      reason: "max_steps",
-      steps: state.step,
-      trace: [...state.trace],
+    return stoppedResult(state)
+  }
+
+  async function resumeRemainingToolCalls(
+    state: CodingLoopState,
+    toolCalls: ToolCall[],
+  ): Promise<CodingLoopResult | undefined> {
+    if (toolCalls.length === 0) {
+      return undefined
     }
+
+    const batchResult = await processToolBatch(state, toolCalls)
+
+    if (batchResult.status === "approval_required") {
+      return {
+        ...baseResult(state),
+        status: "approval_required",
+        request: batchResult.request,
+        pending: batchResult.pending,
+      }
+    }
+
+    return undefined
   }
 
   return {
@@ -280,13 +359,16 @@ export function createMultiStepCodingAgent(
         },
       })
 
-      const state: CodingLoopState = {
-        step: 0,
-        maxSteps: options.maxSteps,
-        messages: [...context.messages],
-        trace: [],
-      }
+      const state = createState(
+        context.messages,
+        input.maxSteps ?? options.maxSteps,
+      )
 
+      return continueLoop(state)
+    },
+
+    async startFromMessages(messages, maxSteps = options.maxSteps) {
+      const state = createState(messages, maxSteps)
       return continueLoop(state)
     },
 
@@ -307,25 +389,27 @@ export function createMultiStepCodingAgent(
         observation,
       )
 
-      // 一个 Assistant Message 可能一次给出多个 Tool Call。
-      // 当前 write 审批完成后，先把同一批剩余 Tool Call 全部处理完，
-      // 每个 Tool Call 都必须得到自己的 Tool Result，之后才能再次调用 LLM。
-      const batchResult = await processToolBatch(
+      const pausedAgain = await resumeRemainingToolCalls(
         pending.state,
         pending.remainingToolCalls,
       )
 
-      if (batchResult.status === "approval_required") {
-        return {
-          status: "approval_required",
-          request: batchResult.request,
-          pending: batchResult.pending,
-          steps: pending.state.step,
-          trace: [...pending.state.trace],
-        }
-      }
+      return pausedAgain ?? continueLoop(pending.state)
+    },
 
-      return continueLoop(pending.state)
+    async resumeStopped(pending, additionalSteps) {
+      validateMaxSteps(additionalSteps)
+
+      // Resume 不是从头开始：保留原 messages / trace / step，
+      // 只把 Runtime 允许的 Model Turn 上限向后扩展。
+      pending.state.maxSteps += additionalSteps
+
+      const paused = await resumeRemainingToolCalls(
+        pending.state,
+        pending.remainingToolCalls,
+      )
+
+      return paused ?? continueLoop(pending.state)
     },
   }
 }
