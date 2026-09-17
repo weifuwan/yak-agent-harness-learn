@@ -6,133 +6,59 @@
 
 它只做一件事：**把 Agent Engineering 拆成一个个可以真正理解、亲手验证的节点。**
 
-学习对象会以 [OpenCode](https://github.com/anomalyco/opencode) 为主，但目标不是“读懂 OpenCode 的所有代码”，而是借成熟实现理解 Agent 系统为什么需要这些能力、每个能力解决什么问题，以及工程复杂度是怎么一步步产生的。
-
 ---
 
 ## 学习原则
 
-不从源码第一行开始看。
-
-每个节点都固定走下面这条路径：
+每个节点都固定走：
 
 ```text
-① 它处在整个流程什么位置？
-        ↓
-② 如果没有它，会出现什么问题？
-        ↓
-③ OpenCode 用什么思路解决？
-        ↓
-④ 暂时不看源码，自己设计一个最小方案
-        ↓
-⑤ 做一个 100～300 行左右的 MVP
-        ↓
-⑥ 跑几个场景，看自己的理解对不对
-        ↓
-⑦ 再回头进入 OpenCode 源码
-        ↓
-⑧ 对比：我的方案 vs OpenCode
-        ↓
-⑨ 总结它为什么比我的 MVP 多那些复杂度
+理解问题
+↓
+建立边界
+↓
+做最小实现
+↓
+验证
+↓
+再看成熟实现
+↓
+理解复杂度为什么出现
 ```
 
-核心不是“抄一个成熟实现”，而是：
-
-```text
-问题
-↓
-约束
-↓
-自己的最小设计
-↓
-亲手验证
-↓
-成熟项目实现
-↓
-理解工程复杂度从哪里来
-```
-
-如果没有先撞到问题，就暂时不要提前引入答案。
+没有先撞到问题，就不提前引入答案。
 
 ---
 
-## 学习地图
-
-第一阶段拆 8 个核心节点：
+## 第一阶段 · Core MVP
 
 ```text
-LLM MVP
-   +
-Tool MVP
-   +
-Agent Loop MVP
-   +
-Session MVP
-   +
-Context MVP
-   +
-Compaction MVP
-   +
-Permission MVP
-   +
-Recovery MVP
+[x] 01 LLM
+[x] 02 Tool
+[x] 03 Agent Loop
+[x] 04 Session
+[x] 05 Context
+[x] 06 Compaction
+[x] 07 Permission
+[x] 08 Recovery
 ```
 
-目录：
+核心边界：
 
 ```text
-mvp/
-├── 01-llm/
-├── 02-tool/
-├── 03-agent-loop/
-├── 04-session/
-├── 05-context/
-├── 06-compaction/
-├── 07-permission/
-└── 08-recovery/
-```
-
-第一阶段 8 个核心节点已经完成最小实现与验证。
-
-第二阶段进入 Integration，把这些已经理解的模块真正组合成一个 Mini Coding Agent：
-
-```text
-integration/
-├── 01-agent-skeleton/
-├── 02-read-think-answer/
-├── 03-read-edit-permission-write/
-├── 04-multi-step-coding-loop/
-└── src/
-```
-
-Mini Coding Agent 跑通以后，再回到 Yakable：
-
-```text
-Agent Engineering 基础
-        +
-Frontend Domain Harness
-        +
-Yakable 产品能力
+LLM        → Provider / Request / Stream
+Tool       → Capability / Call / Execution / Result
+Agent Loop → Continue / Stop / maxSteps
+Session    → 完整历史 / Persistence / Resume
+Context    → 本轮模型到底看到什么
+Compaction → Selection 后仍太长怎么办
+Permission → Tool Call 到 Execution 之间的最终执行权
+Recovery   → Retry / State / Checkpoint / Resume / Rollback
 ```
 
 ---
 
-## 第一阶段核心节点
-
-```text
-01 LLM        → Provider / Request / Stream / Unified Interface
-02 Tool       → Tool Definition / Call / Execution / Result
-03 Agent Loop → Continue / Stop / maxSteps / Runtime State
-04 Session    → History / Persistence / Resume
-05 Context    → 本轮模型到底看到什么
-06 Compaction → Trigger / Hot-Cold / Summary / Rebuild
-07 Permission → allow / ask / deny / Scope / Policy
-08 Recovery   → Retry / State / Checkpoint / Resume / Rollback
-```
-
----
-
-## Integration · Mini Coding Agent
+## 第二阶段 · Integration · Mini Coding Agent
 
 学习问题：**已经分别理解的能力，怎样真正组合成一个 Coding Agent？**
 
@@ -152,84 +78,83 @@ Yakable 产品能力
 06 Minimal Coding Agent Runtime
 ```
 
-当前主链已经变成：
+当前目录：
 
 ```text
-User Prompt
+integration/
+├── 01-agent-skeleton/
+├── 02-read-think-answer/
+├── 03-read-edit-permission-write/
+├── 04-multi-step-coding-loop/
+├── 05-session-context-recovery/
+└── src/
+```
+
+---
+
+## 当前主链
+
+```text
+Session
 ↓
 Context Runtime
 ↓
+Compaction Runtime
+↓
 LLM
 ↓
-Tool Call ?
+Tool Batch ?
 ├── read_file
 ├── write_file → Permission Runtime
 ├── run_test
 └── no tool → final answer
 ↓
-Tool Result
+Tool Results
 ↓
-LLM
+CodingLoopState
 ↓
-Continue / Done
+Continue / Done / Recovery Required
 ```
 
-Runtime 同时维护：
+Recovery 现在分成两个方向：
 
 ```text
-Loop State
-maxSteps
-Permission boundary
-workspace boundary
+Resume
+= 保留原 CodingLoopState，从停下的位置继续
+
+Rollback
+= 使用 Run 开始前的 Checkpoint 恢复工作区
 ```
+
+只有完整 `Done` Run 才会写回 Session。
+
+所以 Session 保持：
+
+> **完整事实边界，而不是半截执行日志。**
 
 详细：[`integration/README.md`](./integration/README.md)
 
 ---
 
-## Done 标准
-
-一个节点不是“代码能跑”就算完成。
-
-至少满足：
-
-- 我能不用看源码解释这个节点为什么存在。
-- 我能画出它在完整 Agent 流程里的输入和输出。
-- 我能写一个最小版本验证自己的理解。
-- 我能说明自己的 MVP 有哪些明确缺陷。
-- 我能重新看 OpenCode，并解释成熟实现为什么多出那些复杂度。
-- 我能判断哪些复杂度当前值得学，哪些只是产品规模带来的工程需求。
-
-做不到这些，就继续留在当前节点，不进入下一关。
-
----
-
 ## 当前进度
-
-第一阶段：
-
-```text
-[x] 01 LLM
-[x] 02 Tool
-[x] 03 Agent Loop
-[x] 04 Session
-[x] 05 Context
-[x] 06 Compaction
-[x] 07 Permission
-[x] 08 Recovery
-```
-
-第二阶段：
 
 ```text
 [x] Integration 01 · Agent Skeleton
 [x] Integration 02 · Read → Think → Answer
 [x] Integration 03 · Read → Edit → Permission → Write
-[>] Integration 04 · Multi-Step Coding Loop
-[ ] Integration 05 · Session / Context / Recovery
+[x] Integration 04 · Multi-Step Coding Loop
+[>] Integration 05 · Session / Context / Recovery
 [ ] Integration 06 · Minimal Coding Agent Runtime
 ```
 
-当前进入 **Integration 04 · Multi-Step Coding Loop**。
+当前进入 **Integration 05 · Session / Context / Recovery**。
+
+下一步不再增加新能力，而是最终收口：
+
+```text
+createMiniCodingAgent(...)
+↓
+agent.run(...)
+```
 
 > 不是为了更快写出 Agent，而是为了真正知道 Agent 为什么这样工作。
