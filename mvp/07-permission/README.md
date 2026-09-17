@@ -2,7 +2,7 @@
 
 > 核心问题：**Agent 会调用 Tool 以后，为什么不能让它想做什么就做什么？**
 
-当前状态：`LEARNING`
+状态：`COMPLETE`
 
 核心边界：
 
@@ -21,9 +21,9 @@ LLM
 ↓
 Tool Call
 ↓
-Permission
+Permission Runtime
 ↓
-Tool Execution
+Tool Execution / Approval / Blocked
 ```
 
 ---
@@ -31,28 +31,12 @@ Tool Execution
 ## 学习路线
 
 ```text
-01 No Permission
-   ↓
-02 Allow / Deny
-   ↓
-03 Ask Before Execute
-   ↓
-04 Resource Scope
-   ↓
-05 Policy Precedence
-   ↓
-06 Minimal Permission Runtime
-```
-
-当前进度：
-
-```text
 01 No Permission              ✅
 02 Allow / Deny               ✅
 03 Ask Before Execute         ✅
 04 Resource Scope             ✅
-05 Policy Precedence          ← 当前
-06 Minimal Permission Runtime ← 后续
+05 Policy Precedence          ✅
+06 Minimal Permission Runtime ✅
 ```
 
 ---
@@ -69,7 +53,7 @@ Tool Call
 直接 execute()
 ```
 
-没有任何权限层。
+没有权限层，Tool Call 会直接变成真实副作用。
 
 ```text
 01 = Unrestricted
@@ -85,12 +69,12 @@ Tool Call
 npm run permission:02
 ```
 
-第一次加入：
+第一次加入 Gate：
 
 ```text
 Tool Call
 ↓
-Permission Gate
+Permission
 ↓
 ├── allow → execute
 └── deny  → blocked
@@ -116,17 +100,19 @@ Permission 扩成：
 allow / ask / deny
 ```
 
-`ask` 第一次让 Runtime 出现：
+`ask` 不等于 allow：
 
 ```text
+ask
+↓
 approval_required
 ↓
-等待外部 approve / reject
+Tool 暂停执行
 ↓
-再决定 execute / blocked
+approve / reject
+↓
+execute / blocked
 ```
-
-模型不能自己批准自己的 Tool Call。
 
 ```text
 03 = Approval
@@ -142,12 +128,14 @@ approval_required
 npm run permission:04
 ```
 
-Permission 不再只看 Tool Name，还开始看：
+Permission 开始同时看：
 
 ```text
+Tool Name
++
 Tool Arguments
 +
-Resource Path
+Resource
 ```
 
 当前最小 Scope：
@@ -156,8 +144,6 @@ Resource Path
 workspace 内  → allow
 workspace 外  → deny
 ```
-
-所以同一个 `write_file`，因为 path 不同，可以得到不同 Permission Decision。
 
 ```text
 04 = Scope
@@ -169,25 +155,11 @@ workspace 外  → deny
 
 # 05 · Policy Precedence
 
-核心问题：
-
-> **一次 Tool Call 同时命中多条 Permission Rule 时，最终到底听谁的？**
-
-运行：
-
 ```bash
 npm run permission:05
 ```
 
-这一轮第一次把 Permission 拆成：
-
-```text
-matchRules()
-= 哪些规则命中
-
-resolveDecision()
-= 命中以后最终谁赢
-```
+一次 Tool Call 可能同时命中多条规则。
 
 当前学习版人为规定：
 
@@ -195,68 +167,17 @@ resolveDecision()
 deny > ask > allow
 ```
 
-默认 Policy：
+流程：
 
 ```text
-workspace:inside → allow
-write_file       → ask
-.env             → deny
+matchRules()
+↓
+多个 Decision
+↓
+resolveDecision()
+↓
+一个最终 Decision
 ```
-
-默认验证：
-
-```text
-Case A
-read_file(workspace/notes.txt)
-↓
-只命中 allow
-↓
-final = allow
-↓
-Tool 执行
-```
-
-```text
-Case B
-write_file(workspace/src/app.txt)
-↓
-allow + ask
-↓
-ask > allow
-↓
-final = ask
-↓
-approval_required
-↓
-Tool 不执行
-```
-
-```text
-Case C
-write_file(workspace/.env)
-↓
-allow + ask + deny
-↓
-deny > ask > allow
-↓
-final = deny
-↓
-blocked
-↓
-Tool 不执行
-```
-
-这一轮真正建立：
-
-> **Permission Rule 可以有很多条，但一次 Tool Call 最终必须收敛成一个 Decision。**
-
-注意：
-
-```text
-deny > ask > allow
-```
-
-只是当前学习 MVP 的简单策略，不代表所有成熟系统都必须这么设计。
 
 ```text
 05 = Policy
@@ -266,7 +187,60 @@ deny > ask > allow
 
 ---
 
-## 五轮连起来
+# 06 · Minimal Permission Runtime
+
+```bash
+npm run permission:06
+```
+
+前五轮的能力最终收进：
+
+```ts
+const permissionRuntime = createPermissionRuntime({
+  tools,
+  workspaceRoot,
+  rules,
+})
+```
+
+调用方只面对：
+
+```ts
+permissionRuntime.start(toolCall)
+permissionRuntime.resume(request, approval)
+```
+
+内部负责：
+
+```text
+Resource Scope
++
+Rule Match
++
+Policy Resolution
++
+Approval
++
+Tool Execution
+```
+
+`start()` 统一返回：
+
+```text
+executed
+approval_required
+blocked
+```
+
+```text
+06 = Runtime
+```
+
+详细：[`06-minimal-permission-runtime/README.md`](./06-minimal-permission-runtime/README.md)
+
+---
+
+## 六轮连起来
 
 ```text
 01 = Unrestricted
@@ -282,71 +256,59 @@ ask + 外部批准
 权限开始关注具体 Resource
 
 05 = Policy
-多条 Rule 命中后收敛成一个 Decision
+多条规则冲突时得到最终 Decision
+
+06 = Runtime
+把判断、审批和执行收进统一入口
 ```
 
-也可以这样理解：
+最终链路：
 
 ```text
-04 Scope
-= 哪些规则可能命中
-
-05 Policy
-= 命中多条以后最终听谁的
-```
-
----
-
-## 为什么下一步是 Minimal Permission Runtime？
-
-现在能力已经散成：
-
-```text
-Gate
-Approval
+Tool Call
+↓
+Permission Runtime
+↓
 Scope
-Rule Match
+↓
+Rules
+↓
 Policy Resolution
+↓
+├── allow → execute
+├── ask   → approval_required → resume
+└── deny  → blocked
 ```
-
-调用方如果自己组织这些步骤，会越来越乱。
-
-所以下一轮进入：
-
-```text
-permission:06 · Minimal Permission Runtime
-```
-
-把这些能力收成一个统一入口，让 Agent Runtime 不需要理解 Permission 内部细节。
 
 ---
 
-## 当前仍然不进入
+## 当前明确没有进入
 
 ```text
-复杂 Rule DSL
-RBAC
+Approval 持久化
+复杂 RBAC
 OS Sandbox
 容器隔离
-企业审批流
 网络权限
-审批持久化
+企业审批流
+企业审计
 完整符号链接安全模型
 ```
 
+这些复杂度等真正遇到问题以后再引入。
+
 ---
 
-## 当前 Done 标准
+## Permission MVP 最终结论
 
-### Permission 05
+> **Tool 决定 Agent 有什么能力；Permission 决定某一次能力调用能不能真正发生。**
 
-- [ ] 我知道一条 Tool Call 可以同时命中多条 Rule。
-- [ ] 我能区分 Rule Match 和 Policy Resolution。
-- [ ] 我知道当前 MVP 的优先级是 `deny > ask > allow`。
-- [ ] 我知道这个优先级只是当前学习设计，不是通用标准。
-- [ ] 我知道最终只能得到一个 Permission Decision。
-- [ ] 我知道 `ask / deny` 时 Tool 不能提前产生副作用。
-- [ ] 我知道 `04 = Scope`，`05 = Policy`。
-- [ ] 我知道下一步为什么需要 Minimal Permission Runtime。
+> **模型可以提出动作，但最终执行权属于 Runtime / User，而不是模型自己。**
 
-做到这些，就进入 **permission:06 · Minimal Permission Runtime**。
+到这里，**07 Permission MVP 封板**。
+
+下一阶段：
+
+```text
+08 · Recovery MVP
+```
