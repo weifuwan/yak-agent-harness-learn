@@ -31,8 +31,7 @@
         ↓
 ⑦ 再回头进入 OpenCode 源码
         ↓
-⑧ 对比：
-   我的方案 vs OpenCode
+⑧ 对比：我的方案 vs OpenCode
         ↓
 ⑨ 总结它为什么比我的 MVP 多那些复杂度
 ```
@@ -102,6 +101,7 @@ integration/
 ├── 01-agent-skeleton/
 ├── 02-read-think-answer/
 ├── 03-read-edit-permission-write/
+├── 04-multi-step-coding-loop/
 └── src/
 ```
 
@@ -117,73 +117,18 @@ Yakable 产品能力
 
 ---
 
-## 01 · LLM MVP
-
-学习问题：**一次 Provider Turn 到底是什么？**
-
-重点理解 Provider、Model Request、Streaming、统一 LLM Interface 和 Provider 差异。
-
----
-
-## 02 · Tool MVP
-
-学习问题：**模型怎样从“会说”变成“能做”？**
-
-重点理解 Tool Definition、Tool Call、Tool Execution、Tool Result，以及 Tool Result 为什么必须重新回到模型。
-
----
-
-## 03 · Agent Loop MVP
-
-学习问题：**为什么一次模型调用不能完成一个 Coding Agent 任务？**
-
-重点理解 Continue、Stop、Tool Result、最大步数以及 Runtime State。
-
----
-
-## 04 · Session MVP
-
-学习问题：**为什么 Agent 不能只存在于一个 `while` 循环里？**
-
-重点研究消息、Tool Call、执行状态如何持久化，以及程序重新启动后怎样延续历史。
-
----
-
-## 05 · Context MVP
-
-学习问题：**这一轮模型到底应该知道什么？**
-
-重点区分：
+## 第一阶段核心节点
 
 ```text
-完整持久化状态
-≠
-本轮 Model Context
+01 LLM        → Provider / Request / Stream / Unified Interface
+02 Tool       → Tool Definition / Call / Execution / Result
+03 Agent Loop → Continue / Stop / maxSteps / Runtime State
+04 Session    → History / Persistence / Resume
+05 Context    → 本轮模型到底看到什么
+06 Compaction → Trigger / Hot-Cold / Summary / Rebuild
+07 Permission → allow / ask / deny / Scope / Policy
+08 Recovery   → Retry / State / Checkpoint / Resume / Rollback
 ```
-
----
-
-## 06 · Compaction MVP
-
-学习问题：**Context 越来越长以后怎么办？**
-
-重点理解 Trigger、Hot / Cold、Summary、Rebuild 和 Compaction Runtime。
-
----
-
-## 07 · Permission MVP
-
-学习问题：**Agent 会调用工具以后，为什么不能让它想做什么就做什么？**
-
-重点研究 allow / ask / deny、Resource Scope、Policy Precedence 和 Permission Runtime。
-
----
-
-## 08 · Recovery MVP
-
-学习问题：**模型失败、Tool 失败、进程退出、代码改坏以后怎么办？**
-
-重点研究 Retry、Run State、Checkpoint、Resume、Rollback 和 Recovery Runtime。
 
 ---
 
@@ -207,32 +152,35 @@ Yakable 产品能力
 06 Minimal Coding Agent Runtime
 ```
 
-当前主链：
+当前主链已经变成：
 
 ```text
 User Prompt
 ↓
 Context Runtime
 ↓
-Tool-capable LLM
+LLM
 ↓
-read_file
+Tool Call ?
+├── read_file
+├── write_file → Permission Runtime
+├── run_test
+└── no tool → final answer
 ↓
 Tool Result
 ↓
 LLM
 ↓
-write_file Tool Call
-↓
-Permission Runtime
-↓
-approve / reject
-↓
-Tool Execution / Blocked
-↓
-LLM
-↓
-Answer
+Continue / Done
+```
+
+Runtime 同时维护：
+
+```text
+Loop State
+maxSteps
+Permission boundary
+workspace boundary
 ```
 
 详细：[`integration/README.md`](./integration/README.md)
@@ -276,12 +224,12 @@ Answer
 ```text
 [x] Integration 01 · Agent Skeleton
 [x] Integration 02 · Read → Think → Answer
-[>] Integration 03 · Read → Edit → Permission → Write
-[ ] Integration 04 · Multi-Step Coding Loop
+[x] Integration 03 · Read → Edit → Permission → Write
+[>] Integration 04 · Multi-Step Coding Loop
 [ ] Integration 05 · Session / Context / Recovery
 [ ] Integration 06 · Minimal Coding Agent Runtime
 ```
 
-当前进入 **Integration 03 · Read → Edit → Permission → Write**。
+当前进入 **Integration 04 · Multi-Step Coding Loop**。
 
 > 不是为了更快写出 Agent，而是为了真正知道 Agent 为什么这样工作。
