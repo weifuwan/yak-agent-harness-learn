@@ -39,8 +39,8 @@ Integration 仍然沿用同一个原则：
 当前进度：
 
 ```text
-01 Agent Skeleton                    ← 当前
-02 Read → Think → Answer             ← 后续
+01 Agent Skeleton                    ✅
+02 Read → Think → Answer             ← 当前
 03 Read → Edit → Permission → Write  ← 后续
 04 Multi-Step Coding Loop            ← 后续
 05 Session / Context / Recovery      ← 后续
@@ -71,8 +71,6 @@ LLM Provider
 Answer
 ```
 
-当前没有 Tool，所以它还不会读文件、改文件或跑测试。
-
 ```text
 01 = Skeleton
 ```
@@ -81,46 +79,150 @@ Answer
 
 ---
 
-## 为什么下一步是 Read → Think → Answer？
+# 02 · Read → Think → Answer
 
-当前 Agent 的项目知识来自预先注入的 Project Context。
+核心问题：
 
-但真实 Coding Agent 应该能面对：
+> **Agent 不知道项目里的真实信息时，能不能自己读取文件，而不是靠模型猜？**
 
-```text
-“package.json 里的 Node 版本是多少？”
+运行：
+
+```bash
+npm run integration:02
 ```
 
-然后自己：
+默认实验：
 
 ```text
+User:
+“请读取 package.json，只告诉我 engines.node 的值。”
+
+↓
+
+LLM
+↓
 read_file(package.json)
 ↓
-得到真实文件内容
+Tool Result
 ↓
-LLM 根据 Tool Result 回答
+LLM
+↓
+Answer
+```
+
+这一轮复用：
+
+```text
+Context Runtime
++
+Unified Tool Interface
++
+read_file
+```
+
+同时暴露了 Integration 的第一个真实接口问题：
+
+```text
+普通 Provider.chat()
+只支持文本消息
+
+Tool Integration
+还需要 Tool Schema / Tool Call / Tool Result
+```
+
+所以这一轮明确增加 `ToolCapableProvider` 边界，而不是让 Agent 主流程直接处理 Provider HTTP 细节。
+
+### 为什么只允许一次读取？
+
+当前故意限制：
+
+```text
+Model Turn 1
+→ read_file
+
+Tool Result
+↓
+Model Turn 2
+→ final answer
+```
+
+还不允许多个 Tool Round。
+
+因为多次读取、多步骤修改、测试失败再修改属于：
+
+```text
+integration:04 · Multi-Step Coding Loop
+```
+
+```text
+02 = Inspect
+```
+
+详细：[`02-read-think-answer/README.md`](./02-read-think-answer/README.md)
+
+---
+
+## 为什么下一步是 Read → Edit → Permission → Write？
+
+现在 Agent 已经能：
+
+```text
+读真实文件
+↓
+根据真实内容回答
+```
+
+但还不能：
+
+```text
+修改文件
+```
+
+一旦允许 `write_file`，问题就不再只是 Tool 能力，而是：
+
+```text
+模型想写
+↓
+到底能不能写？
+↓
+Permission Runtime
+↓
+allow / ask / deny
 ```
 
 所以下一轮进入：
 
 ```text
-integration:02 · Read → Think → Answer
+integration:03 · Read → Edit → Permission → Write
 ```
 
-第一次把 Tool + Agent Loop 接进 Integration。
+---
+
+## 当前明确不进入
+
+```text
+write_file
+run_test
+多个 Tool Call Round
+Session 持久化
+Compaction
+Recovery
+完整 Coding Agent Runtime
+```
 
 ---
 
 ## 当前 Done 标准
 
-### Integration 01
+### Integration 02
 
-- [ ] 我知道 Integration 不是重新实现 8 个 MVP，而是组合已经理解的能力。
-- [ ] 我能解释 `MiniCodingAgent` 为什么是统一入口。
-- [ ] 我知道 Context Runtime 负责组装模型输入，Agent 负责流程编排。
-- [ ] 我知道 Provider 细节不应该泄漏进 Agent 主流程。
-- [ ] 我知道没有 Tool 时不能假装读取真实文件。
-- [ ] 我知道 `01 = Skeleton`。
-- [ ] 我知道下一步为什么要接 `read_file`。
+- [ ] 我知道 Coding Agent 不应该猜项目文件里的事实。
+- [ ] 我知道模型只负责提出 Tool Call，Runtime 才真正执行 read_file。
+- [ ] 我知道 Tool Result 必须重新回到模型。
+- [ ] 我知道 Project Context 不等于真实项目文件内容。
+- [ ] 我知道为什么 Tool-capable Provider 比普通 Provider 多一层协议能力。
+- [ ] 我知道当前为什么只允许一次 read_file。
+- [ ] 我知道 `01 = Skeleton`，`02 = Inspect`。
+- [ ] 我知道下一步为什么必须引入 Permission 后才能写文件。
 
-做到这些，就进入 **integration:02 · Read → Think → Answer**。
+做到这些，就进入 **integration:03 · Read → Edit → Permission → Write**。
