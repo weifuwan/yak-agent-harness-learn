@@ -50,6 +50,7 @@
     "permission:01": "node --import tsx mvp/07-permission/01-no-permission/index.ts",
     "permission:02": "node --import tsx mvp/07-permission/02-allow-deny/index.ts",
     "permission:03": "node --import tsx mvp/07-permission/03-ask-before-execute/index.ts",
+    "permission:04": "node --import tsx mvp/07-permission/04-resource-scope/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
