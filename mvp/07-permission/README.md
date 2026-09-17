@@ -49,8 +49,8 @@ Tool Execution
 ```text
 01 No Permission              ✅
 02 Allow / Deny               ✅
-03 Ask Before Execute         ← 当前
-04 Resource Scope             ← 后续
+03 Ask Before Execute         ✅
+04 Resource Scope             ← 当前
 05 Policy Precedence          ← 后续
 06 Minimal Permission Runtime ← 后续
 ```
@@ -63,17 +63,13 @@ Tool Execution
 npm run permission:01
 ```
 
-故意让：
-
 ```text
 Tool Call
 ↓
-找到 Tool
-↓
-execute()
+直接 execute()
 ```
 
-没有任何 Permission Check。
+没有任何权限层。
 
 ```text
 01 = Unrestricted
@@ -89,7 +85,7 @@ execute()
 npm run permission:02
 ```
 
-第一次形成：
+第一次加入：
 
 ```text
 Tool Call
@@ -114,96 +110,30 @@ Permission Gate
 
 # 03 · Ask Before Execute
 
-核心问题：
-
-> **有些操作既不适合永远 allow，也不适合永远 deny，能不能先等待外部批准？**
-
-运行：
-
 ```bash
 npm run permission:03
 ```
 
-这一轮第一次把 Permission 扩成三态：
+Permission 扩成：
 
-```ts
-type PermissionDecision =
-  | "allow"
-  | "ask"
-  | "deny"
+```text
+allow / ask / deny
 ```
 
-关键流程：
+`ask` 的关键：
 
 ```text
 Tool Call
 ↓
-Permission
-↓
-├── allow
-│   ↓
-│   execute()
-│
-├── ask
-│   ↓
-│   approval_required
-│   ↓
-│   Tool 暂停执行
-│   ↓
-│   approve / reject
-│   ↓
-│   execute / blocked
-│
-└── deny
-    ↓
-    blocked
-```
-
-`ask` 的关键不是“多一个字符串”，而是 Runtime 第一次出现：
-
-```text
-暂停副作用
-↓
-等待外部决策
-↓
-再恢复
-```
-
-默认验证：
-
-```text
-Case A
-allow
-→ 直接执行
-
-Case B
 ask
-→ approval_required
-→ approve
-→ resume
-→ 执行
-
-Case C
-ask
-→ approval_required
-→ reject
-→ resume
-→ blocked
-```
-
-而且在 `approval_required` 阶段，目标文件必须仍然不存在，证明 Tool 真的没有提前执行。
-
-最重要的边界：
-
-```text
-LLM
-= 提出 Tool Call
-
-Permission Runtime
-= 判断需要审批
-
-User / External Runtime
-= approve / reject
+↓
+approval_required
+↓
+Tool 暂停执行
+↓
+approve / reject
+↓
+execute / blocked
 ```
 
 模型不能自己批准自己的 Tool Call。
@@ -216,91 +146,191 @@ User / External Runtime
 
 ---
 
-## 三轮连起来
+# 04 · Resource Scope
 
-```text
-01 Unrestricted
-= 没有权限层
+核心问题：
 
-02 Gate
-= allow / deny
+> **同一个 Tool，操作不同 Resource 时，真的应该得到同一个 Permission Decision 吗？**
 
-03 Approval
-= allow / ask / deny
+运行：
+
+```bash
+npm run permission:04
 ```
 
----
-
-## 为什么下一步是 Resource Scope？
-
-现在 Permission 仍然只看：
+前面主要看：
 
 ```text
-tool name
+Tool Name
 ```
 
-例如：
-
-```text
-write_file → ask
-```
-
-但很快会发现：
-
-```text
-write_file("./src/App.ts")
-```
-
-和：
-
-```text
-write_file("../other-project/config")
-```
-
-不应该天然得到同一个权限结果。
-
-所以下一轮进入：
-
-```text
-permission:04 · Resource Scope
-```
-
-第一次把：
+这一轮第一次加入：
 
 ```text
 Tool Name
 +
-Tool Arguments / Resource
+Tool Arguments
++
+Resource Path
 ```
 
-一起纳入 Permission Decision。
+当前只做最小 Scope：
+
+```text
+workspace 内
+→ allow
+
+workspace 外
+→ deny
+```
+
+流程：
+
+```text
+Tool Call
+↓
+读取 arguments.path
+↓
+resolve / relative
+↓
+Resource Scope
+↓
+├── inside  → allow → execute
+└── outside → deny  → blocked
+```
+
+默认验证使用同一个 `write_file`：
+
+```text
+Case A
+write_file(workspace/src/inside.txt)
+→ allow
+→ 文件出现
+
+Case B
+write_file(workspace 外的 outside.txt)
+→ deny
+→ 文件不存在
+```
+
+真正改变 Permission Decision 的不是 Tool，而是：
+
+```text
+arguments.path
+```
+
+这一轮最重要的区别：
+
+```text
+Capability
+= write_file
+
+Resource
+= 这次 write_file 真正操作的 path
+```
+
+所以：
+
+> **Permission 不只要问“用什么 Tool”，还要问“这个 Tool 要操作什么 Resource”。**
+
+当前实现使用：
+
+```text
+path.resolve()
++
+path.relative()
+```
+
+判断 Resource 是否真正位于 workspace 内，而不是简单字符串 `startsWith()`。
+
+同时，Permission 检查得到的规范化 Resource Path 也会用于真正的 Tool Execution，避免“检查 A、实际执行 B”。
+
+```text
+04 = Scope
+```
+
+详细：[`04-resource-scope/README.md`](./04-resource-scope/README.md)
+
+---
+
+## 四轮连起来
+
+```text
+01 = Unrestricted
+没有权限层
+
+02 = Gate
+allow / deny
+
+03 = Approval
+ask + 外部批准
+
+04 = Scope
+权限开始关注具体 Resource
+```
+
+---
+
+## 为什么下一步是 Policy Precedence？
+
+现在我们只有一条很纯的 Scope 规则：
+
+```text
+workspace 内  → allow
+workspace 外  → deny
+```
+
+下一步如果加入：
+
+```text
+write_file → ask
+workspace/** → allow
+.env → deny
+```
+
+就会出现：
+
+```text
+一次 Tool Call
+同时命中多条规则
+↓
+最终到底听谁的？
+```
+
+所以下一轮进入：
+
+```text
+permission:05 · Policy Precedence
+```
+
+研究多个 Permission Rule 冲突时如何得到最终 Decision。
 
 ---
 
 ## 当前仍然不进入
 
 ```text
-Policy Precedence
+复杂 RBAC
 OS Sandbox
-RBAC
+容器隔离
 企业审批流
-审批持久化
-复杂 UI
+网络权限
+符号链接完整安全模型
 ```
 
 ---
 
 ## 当前 Done 标准
 
-### Permission 03
+### Permission 04
 
-- [ ] 我能解释 `ask` 和 `allow` 的区别。
-- [ ] 我知道 `ask` 必须先返回 `approval_required`，不能提前执行 Tool。
-- [ ] 我知道 approve 后才可以恢复并执行。
-- [ ] 我知道 reject 后必须 blocked 且没有副作用。
-- [ ] 我知道模型不能自己批准自己的 Tool Call。
-- [ ] 我能解释为什么 Approval 是外部 Runtime / User 的职责。
-- [ ] 我知道 `02 = Gate`，`03 = Approval`。
-- [ ] 我知道下一步为什么需要 Resource Scope。
+- [ ] 我能区分 Capability 和 Resource。
+- [ ] 我知道同一个 Tool 可以因为参数不同得到不同 Permission Decision。
+- [ ] 我知道 Resource Scope 必须发生在 Tool Execution 之前。
+- [ ] 我知道 workspace 外被 deny 后不能产生副作用。
+- [ ] 我知道路径 Scope 不能只用字符串前缀判断。
+- [ ] 我知道 Permission 检查的 Resource 和 Tool 真正执行的 Resource 应保持一致。
+- [ ] 我知道 `03 = Approval`，`04 = Scope`。
+- [ ] 我知道下一步为什么需要 Policy Precedence。
 
-做到这些，就进入 **permission:04 · Resource Scope**。
+做到这些，就进入 **permission:05 · Policy Precedence**。
