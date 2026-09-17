@@ -111,6 +111,8 @@ try {
   })
 
   const failedState = await resumeRuntime.run()
+  const statusBeforeResume = failedState.status
+  const failedStepBeforeResume = failedState.currentStepId
 
   console.log("\nAfter run():")
   printState(failedState)
@@ -132,7 +134,8 @@ try {
   console.log(`report exists      : ${await exists(resumeReportPath)}`)
 
   if (
-    failedState.status !== "success" ||
+    statusBeforeResume !== "failed" ||
+    failedStepBeforeResume !== "step-03" ||
     resumedState.status !== "success" ||
     aBeforeResume !== 1 ||
     bBeforeResume !== 1 ||
