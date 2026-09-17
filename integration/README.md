@@ -40,8 +40,8 @@ Integration 仍然沿用同一个原则：
 
 ```text
 01 Agent Skeleton                    ✅
-02 Read → Think → Answer             ← 当前
-03 Read → Edit → Permission → Write  ← 后续
+02 Read → Think → Answer             ✅
+03 Read → Edit → Permission → Write  ← 当前
 04 Multi-Step Coding Loop            ← 后续
 05 Session / Context / Recovery      ← 后续
 06 Minimal Coding Agent Runtime      ← 后续
@@ -50,8 +50,6 @@ Integration 仍然沿用同一个原则：
 ---
 
 # 01 · Agent Skeleton
-
-运行：
 
 ```bash
 npm run integration:01
@@ -81,27 +79,16 @@ Answer
 
 # 02 · Read → Think → Answer
 
-核心问题：
-
-> **Agent 不知道项目里的真实信息时，能不能自己读取文件，而不是靠模型猜？**
-
-运行：
-
 ```bash
 npm run integration:02
 ```
 
-默认实验：
+第一次让 Agent 主动读取真实项目文件：
 
 ```text
-User:
-“请读取 package.json，只告诉我 engines.node 的值。”
-
-↓
-
 LLM
 ↓
-read_file(package.json)
+read_file
 ↓
 Tool Result
 ↓
@@ -110,49 +97,7 @@ LLM
 Answer
 ```
 
-这一轮复用：
-
-```text
-Context Runtime
-+
-Unified Tool Interface
-+
-read_file
-```
-
-同时暴露了 Integration 的第一个真实接口问题：
-
-```text
-普通 Provider.chat()
-只支持文本消息
-
-Tool Integration
-还需要 Tool Schema / Tool Call / Tool Result
-```
-
-所以这一轮明确增加 `ToolCapableProvider` 边界，而不是让 Agent 主流程直接处理 Provider HTTP 细节。
-
-### 为什么只允许一次读取？
-
-当前故意限制：
-
-```text
-Model Turn 1
-→ read_file
-
-Tool Result
-↓
-Model Turn 2
-→ final answer
-```
-
-还不允许多个 Tool Round。
-
-因为多次读取、多步骤修改、测试失败再修改属于：
-
-```text
-integration:04 · Multi-Step Coding Loop
-```
+只允许一次读取，不提前进入完整 Agent Loop。
 
 ```text
 02 = Inspect
@@ -162,38 +107,148 @@ integration:04 · Multi-Step Coding Loop
 
 ---
 
-## 为什么下一步是 Read → Edit → Permission → Write？
+# 03 · Read → Edit → Permission → Write
 
-现在 Agent 已经能：
+核心问题：
 
-```text
-读真实文件
-↓
-根据真实内容回答
+> **Agent 已经会读文件以后，怎样安全地让它真的修改文件？**
+
+运行：
+
+```bash
+npm run integration:03
 ```
 
-但还不能：
+完整链路：
 
 ```text
-修改文件
-```
-
-一旦允许 `write_file`，问题就不再只是 Tool 能力，而是：
-
-```text
-模型想写
+User
 ↓
-到底能不能写？
+LLM
+↓
+read_file
+↓
+真实文件内容
+↓
+LLM
+↓
+write_file Tool Call
 ↓
 Permission Runtime
 ↓
 allow / ask / deny
+↓
+Tool Execution
+↓
+LLM
+↓
+Answer
+```
+
+默认 `write_file` 会命中：
+
+```text
+ask
+```
+
+所以：
+
+```text
+Tool Call
+≠
+Tool Execution
+```
+
+模型只能提出写入意图，Runtime 拥有最终执行权。
+
+默认 Demo 会分别验证：
+
+```text
+reject
+→ 文件不变
+
+approve
+→ 文件真正改成 port = 8080
+```
+
+这一轮还把读写范围统一到：
+
+```text
+workspaceRoot
+```
+
+并增加硬边界：
+
+```text
+outside workspace → deny
+write_file inside → ask
+.env → deny
+```
+
+```text
+03 = Edit
+```
+
+详细：[`03-read-edit-permission-write/README.md`](./03-read-edit-permission-write/README.md)
+
+---
+
+## 为什么下一步是 Multi-Step Coding Loop？
+
+现在流程还是写死的：
+
+```text
+read once
+↓
+write once
+↓
+answer
+```
+
+但真实 Coding Agent 可能需要：
+
+```text
+read A
+↓
+read B
+↓
+write A
+↓
+write B
+↓
+run_test
+↓
+失败
+↓
+继续修改
+```
+
+这时候就不能再手写：
+
+```text
+Turn 1 = read
+Turn 2 = write
+Turn 3 = answer
+```
+
+需要真正恢复：
+
+```text
+Model
+↓
+Tool
+↓
+Observation
+↓
+Model
+↓
+Continue / Done
 ```
 
 所以下一轮进入：
 
 ```text
-integration:03 · Read → Edit → Permission → Write
+integration:04 · Multi-Step Coding Loop
 ```
 
 ---
@@ -201,9 +256,9 @@ integration:03 · Read → Edit → Permission → Write
 ## 当前明确不进入
 
 ```text
-write_file
 run_test
-多个 Tool Call Round
+多个文件连续修改
+任意多 Tool Round
 Session 持久化
 Compaction
 Recovery
@@ -214,15 +269,15 @@ Recovery
 
 ## 当前 Done 标准
 
-### Integration 02
+### Integration 03
 
-- [ ] 我知道 Coding Agent 不应该猜项目文件里的事实。
-- [ ] 我知道模型只负责提出 Tool Call，Runtime 才真正执行 read_file。
-- [ ] 我知道 Tool Result 必须重新回到模型。
-- [ ] 我知道 Project Context 不等于真实项目文件内容。
-- [ ] 我知道为什么 Tool-capable Provider 比普通 Provider 多一层协议能力。
-- [ ] 我知道当前为什么只允许一次 read_file。
-- [ ] 我知道 `01 = Skeleton`，`02 = Inspect`。
-- [ ] 我知道下一步为什么必须引入 Permission 后才能写文件。
+- [ ] 我知道 read_file 和 write_file 的风险不同。
+- [ ] 我知道 Tool Call 不等于 Tool Execution。
+- [ ] 我知道 Permission 必须放在 Tool Call 和 Tool Execution 之间。
+- [ ] 我知道 `ask` 时文件不能提前变化。
+- [ ] 我知道 approve / reject 必须来自 Runtime 外部，而不是 LLM 自己批准自己。
+- [ ] 我知道 workspaceRoot 是读写和 Permission Scope 的共同边界。
+- [ ] 我知道 `01 = Skeleton`、`02 = Inspect`、`03 = Edit`。
+- [ ] 我知道下一步为什么需要真正的 Multi-Step Coding Loop。
 
-做到这些，就进入 **integration:03 · Read → Edit → Permission → Write**。
+做到这些，就进入 **integration:04 · Multi-Step Coding Loop**。
