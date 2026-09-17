@@ -93,9 +93,9 @@ mvp/
 └── 08-recovery/
 ```
 
-这 8 个节点没有全部理解之前，不急着合并成完整 Agent。
+第一阶段 8 个核心节点已经完成最小实现与验证。
 
-等每个节点都完成自己的 MVP、测试场景和源码对比后，再进入 Integration 阶段，做一个自己真正理解的 Mini Coding Agent。
+下一步不再继续堆单点能力，而是进入 Integration 阶段，把这些已经理解的模块真正组合成一个 Mini Coding Agent。
 
 Mini Coding Agent 跑通以后，再回到 Yakable：
 
@@ -284,9 +284,11 @@ mvp/xx-name/
 [x] 05 Context
 [x] 06 Compaction
 [x] 07 Permission
-[ ] 08 Recovery      ← next
+[x] 08 Recovery
 ```
 
-当前进入 **08 · Recovery MVP**。
+**第一阶段 8 个核心 MVP 已全部完成。**
+
+下一步：**Integration · Mini Coding Agent**。
 
 > 不是为了更快写出 Agent，而是为了真正知道 Agent 为什么这样工作。
