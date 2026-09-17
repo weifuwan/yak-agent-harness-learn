@@ -1,10 +1,10 @@
 # Yak Agent Harness Learn
 
-> 用成熟 Agent 项目学习 Agent Engineering：先理解问题，再做最小实现，最后回到源码验证理解。
+> 用成熟开源项目学习 Agent Engineering 与 Frontend Harness：先理解问题，再做最小实现，最后回到源码验证理解。
 
-这个仓库不是为了快速做出一个 Agent Demo。
+这个仓库不是为了快速做出一个 Agent Demo，也不是为了机械复刻某个开源项目。
 
-它只做一件事：**把 Agent Engineering 拆成可以真正理解、亲手验证的节点，再把它们重新组合起来。**
+它只做一件事：**围绕 Yakable，把 Agent、Frontend Harness、Visual Editing、App Builder 和 Coding Runtime 拆成可以真正理解、亲手验证的节点，再把需要的能力重新组合起来。**
 
 ---
 
@@ -95,7 +95,7 @@ integration/
 
 ---
 
-## 最终主链
+## Agent 最终主链
 
 ```text
 User Prompt
@@ -145,66 +145,172 @@ Session：
 
 ---
 
-## 最终 Runtime API
+# 第三阶段开始 · Source Study for Yakable
 
-```ts
-const agent = createMiniCodingAgentRuntime({
-  llm,
-  workspaceRoot,
-  snapshotFiles,
-  compaction,
-})
-
-let result = await agent.run({
-  sessionId,
-  prompt,
-})
-```
-
-调用方不再自己创建：
+Agent 基础已经完成。后续不再为了“学 Agent”而继续堆模块，而是按 Yakable 真正需要的能力，从不同成熟项目中分别学习。
 
 ```text
-Tools
-Permission Runtime
-Session Store
-Coding Loop
-Continuity Agent
+study/
+├── 01-opencode/   ✅ Agent Engineering
+├── 02-openui/     ← Frontend Harness · 当前
+├── 03-onlook/     ⏳ Visual Editing
+├── 04-dyad/       ⏳ AI App Builder
+└── 05-codex/      ⏳ Coding Runtime
 ```
 
-Runtime 统一装配这些内部能力。
+详细总路线：[`study/README.md`](./study/README.md)
 
-但以下决定仍然显式保留给外部：
+## 01 · OpenCode · COMPLETE
+
+OpenCode 阶段已经通过本仓库的 `mvp/` + `integration/` 完成 Agent 基础学习。
 
 ```text
-resumeApproval()
-resumeRecovery()
-rollback()
+LLM
+Tool
+Loop
+Session
+Context
+Compaction
+Permission
+Recovery
 ```
 
-因为：
+源码后续仍可用于对照，但不再是当前主线。
 
-> **封装复杂度，不等于替用户做授权和恢复决策。**
+详细：[`study/01-opencode/README.md`](./study/01-opencode/README.md)
 
 ---
 
-## 当前阶段
+# 当前阶段 · OpenUI · Frontend Harness
 
-第一阶段 Core MVP：`8 / 8 COMPLETE`
+参考项目：`thesysdev/openui`
 
-第二阶段 Integration：`6 / 6 COMPLETE`
+核心问题：
 
-下一步不再继续堆新的最小模块。
+> **怎样让模型在受控的组件、语言、Runtime 和 Renderer 中生成稳定 UI，而不是每次自由发挥？**
 
-更适合进入：
+学习路线：
 
 ```text
-自己的 Mini Coding Agent
-↓
-对照 OpenCode 等成熟实现
-↓
-解释成熟工程为什么多出那些复杂度
-↓
-把真正需要的能力带回 Yakable
+01 No UI Harness
+   ↓
+02 Component Library
+   ↓
+03 Library → Prompt
+   ↓
+04 UI Language / Parser
+   ↓
+05 Runtime
+   ↓
+06 Renderer / Design System
+   ↓
+07 Minimal Frontend Harness
 ```
 
+对应目录：
+
+```text
+study/02-openui/
+├── 01-no-ui-harness/
+├── 02-component-library/
+├── 03-library-to-prompt/
+├── 04-ui-language-parser/
+├── 05-runtime/
+├── 06-renderer-design-system/
+└── 07-minimal-frontend-harness/
+```
+
+源码重点对应：
+
+```text
+OpenUI library.ts            → Component Library
+ComponentPromptSpec          → Library → Prompt
+parser/                      → UI Language / Parser
+runtime/                     → Runtime
+Renderer.tsx + Design System → Render
+examples/harnesses/          → 完整 Harness
+```
+
+详细：[`study/02-openui/README.md`](./study/02-openui/README.md)
+
+---
+
+# 后续阶段
+
+## Onlook · Visual Editing
+
+```text
+React Source
+↕
+DOM
+↕
+Visual Editor
+```
+
+重点研究元素选择、DOM ↔ Source Mapping、视觉修改和代码回写。
+
+详细：[`study/03-onlook/README.md`](./study/03-onlook/README.md)
+
+## Dyad · AI App Builder
+
+```text
+Prompt
+↓
+Project
+↓
+Workspace
+↓
+Preview
+↓
+Incremental Update
+```
+
+重点研究前面的能力怎样被组织成完整 AI App Builder 产品闭环。
+
+详细：[`study/04-dyad/README.md`](./study/04-dyad/README.md)
+
+## Codex · Coding Runtime
+
+重点只取 Yakable 真正需要的部分：
+
+```text
+Runtime Protocol
+Thread / Turn
+apply_patch
+TurnDiffTracker
+Tool Registry
+Approval / Sandbox
+```
+
+详细：[`study/05-codex/README.md`](./study/05-codex/README.md)
+
+---
+
+# 最终目标 · Yakable
+
+```text
+OpenCode
+Agent Engineering
+        +
+OpenUI
+Frontend Harness
+        +
+Onlook
+Visual Editing
+        +
+Dyad
+App Builder Workflow
+        +
+Codex
+Patch / Diff / Runtime
+        ↓
+Yakable
+```
+
+但这些项目不是要全部照搬。
+
+最终原则仍然是：
+
 > **把确定性交给 Harness，把不确定性交给 Agent。**
+
+现阶段只推进 **OpenUI · Frontend Harness**，其余目录先作为后续学习边界保留。
