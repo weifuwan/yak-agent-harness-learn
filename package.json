@@ -40,6 +40,7 @@
     "context:03": "node --env-file=.env --import tsx mvp/05-context/03-context-sources/index.ts",
     "context:04": "node --env-file=.env --import tsx mvp/05-context/04-history-selection/index.ts",
     "context:05": "node --env-file=.env --import tsx mvp/05-context/05-safe-context-units/index.ts",
+    "context:06": "node --env-file=.env --import tsx mvp/05-context/06-minimal-context-runtime/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
