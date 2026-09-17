@@ -37,6 +37,7 @@ function validateUnit(unit: ContextUnit, index: number) {
   }
 
   const toolCallIds = new Set<string>()
+  const toolResultIds = new Set<string>()
 
   for (const message of unit.messages) {
     if (message.role === "assistant") {
@@ -45,9 +46,21 @@ function validateUnit(unit: ContextUnit, index: number) {
       }
     }
 
-    if (message.role === "tool" && !toolCallIds.has(message.tool_call_id)) {
+    if (message.role === "tool") {
+      if (!toolCallIds.has(message.tool_call_id)) {
+        throw new Error(
+          `Context Unit ${index} contains orphan tool result: ${message.tool_call_id}`,
+        )
+      }
+
+      toolResultIds.add(message.tool_call_id)
+    }
+  }
+
+  for (const toolCallId of toolCallIds) {
+    if (!toolResultIds.has(toolCallId)) {
       throw new Error(
-        `Context Unit ${index} contains orphan tool result: ${message.tool_call_id}`,
+        `Context Unit ${index} contains tool call without result: ${toolCallId}`,
       )
     }
   }
