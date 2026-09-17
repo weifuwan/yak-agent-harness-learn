@@ -39,6 +39,12 @@ function toLLMRequest(context: ModelContext): LLMRequest {
   }
 
   const messages: LLMRequest["messages"] = rest.map((message) => {
+    if (message.role === "system") {
+      throw new Error(
+        "integration:01 expects exactly one leading system message",
+      )
+    }
+
     if (message.role === "tool") {
       throw new Error(
         "integration:01 does not support tool messages yet; Tool Integration comes later",
