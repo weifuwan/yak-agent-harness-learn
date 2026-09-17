@@ -59,7 +59,7 @@
 
 ## 学习地图
 
-第一阶段只拆 8 个核心节点。
+第一阶段拆 8 个核心节点：
 
 ```text
 LLM MVP
@@ -95,7 +95,13 @@ mvp/
 
 第一阶段 8 个核心节点已经完成最小实现与验证。
 
-下一步不再继续堆单点能力，而是进入 Integration 阶段，把这些已经理解的模块真正组合成一个 Mini Coding Agent。
+第二阶段进入 Integration，把这些已经理解的模块真正组合成一个 Mini Coding Agent：
+
+```text
+integration/
+├── 01-agent-skeleton/
+└── src/
+```
 
 Mini Coding Agent 跑通以后，再回到 Yakable：
 
@@ -113,32 +119,7 @@ Yakable 产品能力
 
 学习问题：**一次 Provider Turn 到底是什么？**
 
-先理解：
-
-- LLM 和 Agent 有什么区别？
-- Provider 是什么？
-- 一次 Model Request 的输入到底有哪些？
-- 为什么 Coding Agent 更适合使用 Stream，而不是一次返回完整字符串？
-- 为什么要把 Provider 的响应转换成统一的内部事件？
-- 为什么 Provider SDK 不应该泄漏到 Agent 上层？
-
-MVP 暂时只做：
-
-```text
-User
- ↓
-LLM.stream()
- ↓
-One Provider
- ↓
-Streaming Response
- ↓
-LLMEvent
- ↓
-Console
-```
-
-暂时不做 Tool、Agent Loop、Session、Context、Memory、Compaction、Permission。
+重点理解 Provider、Model Request、Streaming、统一 LLM Interface 和 Provider 差异。
 
 ---
 
@@ -146,14 +127,7 @@ Console
 
 学习问题：**模型怎样从“会说”变成“能做”？**
 
-重点理解 Tool Definition、Tool Call、参数校验、Tool Execution、Tool Result，以及 Tool Result 为什么必须重新回到模型。
-
-MVP 只准备少量工具，例如：
-
-```text
-read_file(path)
-write_file(path, content)
-```
+重点理解 Tool Definition、Tool Call、Tool Execution、Tool Result，以及 Tool Result 为什么必须重新回到模型。
 
 ---
 
@@ -161,23 +135,7 @@ write_file(path, content)
 
 学习问题：**为什么一次模型调用不能完成一个 Coding Agent 任务？**
 
-从最小循环开始理解：
-
-```text
-Model
- ↓
-Action / Tool Call
- ↓
-Execute
- ↓
-Observation
- ↓
-Model
- ↓
-Continue / Done
-```
-
-重点研究 Continue、Stop、Tool Result、最大步数以及异常退出。
+重点理解 Continue、Stop、Tool Result、最大步数以及 Runtime State。
 
 ---
 
@@ -185,7 +143,7 @@ Continue / Done
 
 学习问题：**为什么 Agent 不能只存在于一个 `while` 循环里？**
 
-重点研究消息、Tool Call、执行状态如何持久化，以及程序中断、重新启动后还能知道“之前发生了什么”。
+重点研究消息、Tool Call、执行状态如何持久化，以及程序重新启动后怎样延续历史。
 
 ---
 
@@ -201,15 +159,13 @@ Continue / Done
 本轮 Model Context
 ```
 
-研究 System、Task、Conversation、Project、Tool Result 等信息如何进入一次模型调用，以及如何控制噪音和 Token。
-
 ---
 
 ## 06 · Compaction MVP
 
 学习问题：**Context 越来越长以后怎么办？**
 
-先自己实现一个非常简单、甚至并不完美的压缩方案，再研究 OpenCode 的 overflow / compaction 为什么会复杂得多。
+重点理解 Trigger、Hot / Cold、Summary、Rebuild 和 Compaction Runtime。
 
 ---
 
@@ -217,7 +173,7 @@ Continue / Done
 
 学习问题：**Agent 会调用工具以后，为什么不能让它想做什么就做什么？**
 
-重点研究 allow / ask / deny、工具权限、目录边界、危险操作以及 Agent 能力差异。
+重点研究 allow / ask / deny、Resource Scope、Policy Precedence 和 Permission Runtime。
 
 ---
 
@@ -225,35 +181,45 @@ Continue / Done
 
 学习问题：**模型失败、Tool 失败、进程退出、代码改坏以后怎么办？**
 
-重点研究 Retry、Run State、Snapshot、Rollback、Resume，以及“恢复”为什么不能只靠重新执行一次 Prompt。
+重点研究 Retry、Run State、Checkpoint、Resume、Rollback 和 Recovery Runtime。
 
 ---
 
-## 每个 MVP 的固定目录
+## Integration · Mini Coding Agent
 
-每个节点保持相同结构：
+学习问题：**已经分别理解的能力，怎样真正组合成一个 Coding Agent？**
 
-```text
-mvp/xx-name/
-├── README.md      # 9 步学习记录，先写问题和设计，再写源码分析
-├── src/           # 自己的 100～300 行最小实现
-├── examples/      # 用来故意制造问题的场景
-└── test/          # 验证理解的最小测试
-```
-
-每个节点的 README 都按同一模板维护：
+学习路线：
 
 ```text
-1. 流程位置
-2. 没有它会发生什么
-3. OpenCode 的解决思路
-4. 我的最小设计
-5. MVP 实现
-6. 验证场景
-7. OpenCode 源码入口
-8. 我的 MVP vs OpenCode
-9. 我学到了什么
+01 Agent Skeleton
+   ↓
+02 Read → Think → Answer
+   ↓
+03 Read → Edit → Permission → Write
+   ↓
+04 Multi-Step Coding Loop
+   ↓
+05 Session / Context / Recovery
+   ↓
+06 Minimal Coding Agent Runtime
 ```
+
+当前先做：
+
+```text
+User Prompt
+↓
+MiniCodingAgent
+↓
+Context Runtime
+↓
+LLM Provider
+↓
+Answer
+```
+
+详细：[`integration/README.md`](./integration/README.md)
 
 ---
 
@@ -276,6 +242,8 @@ mvp/xx-name/
 
 ## 当前进度
 
+第一阶段：
+
 ```text
 [x] 01 LLM
 [x] 02 Tool
@@ -287,8 +255,17 @@ mvp/xx-name/
 [x] 08 Recovery
 ```
 
-**第一阶段 8 个核心 MVP 已全部完成。**
+第二阶段：
 
-下一步：**Integration · Mini Coding Agent**。
+```text
+[>] Integration 01 · Agent Skeleton
+[ ] Integration 02 · Read → Think → Answer
+[ ] Integration 03 · Read → Edit → Permission → Write
+[ ] Integration 04 · Multi-Step Coding Loop
+[ ] Integration 05 · Session / Context / Recovery
+[ ] Integration 06 · Minimal Coding Agent Runtime
+```
+
+当前进入 **Integration 01 · Agent Skeleton**。
 
 > 不是为了更快写出 Agent，而是为了真正知道 Agent 为什么这样工作。
