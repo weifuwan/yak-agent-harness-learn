@@ -27,8 +27,8 @@
 当前进度：
 
 ```text
-01 Full Session As Context   ← 当前
-02 Explicit Context Builder  ← 后续
+01 Full Session As Context   ✅
+02 Explicit Context Builder  ← 当前
 03 Context Sources           ← 后续
 04 History Selection         ← 后续
 05 Safe Context Units        ← 后续
@@ -39,34 +39,6 @@
 
 ## Session 和 Context 的边界
 
-Session 已经解决：
-
-```text
-完整保存发生过什么
-↓
-user
-assistant(tool_call)
-tool(result)
-assistant
-...
-```
-
-但这不代表每次 LLM Request 都应该：
-
-```text
-system
-+
-全部 Session 历史
-+
-当前 user
-```
-
-所以 Context 要解决的是：
-
-> **这一次调用模型，真正应该放哪些信息进去？**
-
-先记住：
-
 ```text
 Session
 = 完整事实历史
@@ -74,6 +46,18 @@ Session
 Context
 = 本轮实际发送给模型的信息
 ```
+
+Session 可以长期保存：
+
+```text
+user
+assistant(tool_call)
+tool(result)
+assistant
+...
+```
+
+但这不代表每次 LLM Request 都应该把全部历史重新发送。
 
 ---
 
@@ -87,13 +71,7 @@ Context
 npm run context:01
 ```
 
-默认使用完全相同的当前任务：
-
-```text
-请只回复 CONTEXT-01
-```
-
-分别构造：
+默认对比：
 
 ```text
 0 个旧 Turn
@@ -101,7 +79,9 @@ npm run context:01
 30 个旧 Turn
 ```
 
-当前策略故意没有任何 Context 设计：
+当前任务完全相同，变化的只有旧 Session 历史数量。
+
+策略故意写成：
 
 ```ts
 const requestMessages = [
@@ -127,83 +107,151 @@ request messages
 prompt_tokens
 ```
 
-旧 Session 中的 `HISTORY-*` 内容和当前任务完全无关，但仍然会被重复发送。
+这一轮得出的核心问题是：
 
-这一轮要看到的是：
-
-> **Session 负责“保存”，但不应该顺便决定“本轮模型看到什么”。**
+> **Session 负责保存，但不应该顺便决定本轮模型看到什么。**
 
 详细说明：[`01-full-session-as-context/README.md`](./01-full-session-as-context/README.md)
 
 ---
 
-## 和 llm:05 的区别
+# Context 02 · Explicit Context Builder
 
-`llm:05` 解决认知：
+核心问题：**Session 和 Model Context 怎么在代码里真正分开？**
 
-```text
-历史 messages 会占用 Context Window
+这一轮第一次引入：
+
+```ts
+buildContext()
 ```
 
-`context:01` 再往上一层：
-
-```text
-既然历史都保存在 Session
-↓
-Runtime 是否应该无条件全部发送？
-```
-
-当前答案仍然故意是：
-
-```text
-全部发送
-```
-
-因为这一轮需要先把问题看清楚。
-
----
-
-## 为什么下一步是 Explicit Context Builder？
-
-现在代码直接写：
-
-```text
-Session.messages
-↓
-LLM Request
-```
-
-中间没有任何独立决策层。
-
-所以下一步进入：
-
-```text
-context:02 · Explicit Context Builder
-```
-
-第一次把流程改成：
+结构从：
 
 ```text
 Session
 ↓
-Context Builder
-↓
-Model Context
+Runtime 直接拼 messages
 ↓
 LLM
 ```
 
-注意：`context:02` 的重点先是**把边界建立起来**，还不会马上做复杂的智能选择。
-
-暂时不进入：
+变成：
 
 ```text
-RAG
-Embedding
+Session
+↓
+buildContext()
+↓
+ModelContext
+↓
+LLM
+```
+
+运行：
+
+```bash
+npm run context:02
+```
+
+新增最小类型：
+
+```ts
+type ModelContext = {
+  messages: Message[]
+}
+```
+
+调用流程：
+
+```ts
+const context = buildContext({
+  systemMessage,
+  session,
+  currentPrompt,
+})
+
+await callModel(context)
+```
+
+## 为什么行为故意不变？
+
+当前 `buildContext()` 仍然全量返回 Session：
+
+```text
+system
++
+全部 session.messages
++
+current user
+```
+
+所以 `0 / 10 / 30` 个旧 Turn 的 `prompt_tokens` 仍然会增长。
+
+这是刻意的。
+
+这一轮只解决：
+
+> **保存什么，和发送什么，先拥有不同的代码入口。**
+
+还没有解决：
+
+```text
+哪些历史值得选
+Token Budget
+相关性
+历史裁剪
 摘要
 Compaction
-复杂 Token Budget
 ```
+
+可以记成：
+
+```text
+context:01
+Session = Context
+
+context:02
+Session
+↓
+Context Builder
+↓
+Context
+```
+
+详细说明：[`02-explicit-context-builder/README.md`](./02-explicit-context-builder/README.md)
+
+---
+
+## 为什么下一步是 Context Sources？
+
+现在已经有一个独立入口：
+
+```ts
+buildContext(...)
+```
+
+新的问题变成：
+
+> **Context 除了 Session History，还可能由哪些信息组成？**
+
+例如 Coding Agent 可能需要：
+
+```text
+System Prompt
+Current Task
+Session History
+Project Information
+Tool Result
+Working Directory
+```
+
+所以下一轮进入：
+
+```text
+context:03 · Context Sources
+```
+
+先把不同信息源拆清楚，再谈如何选择历史。
 
 ---
 
@@ -212,10 +260,17 @@ Compaction
 ### Context 01
 
 - [ ] 我能区分 Session 和 Context。
-- [ ] 我知道完整 Session 可以保存，但不一定应该全部进入每次 LLM Request。
-- [ ] 我知道当前任务相同时，旧历史越多，请求仍然会越来越大。
-- [ ] 我能解释为什么无关历史也是 Context 噪音。
-- [ ] 我知道 Context 是“本轮输入选择”问题，不是 Session 持久化问题。
-- [ ] 我知道下一步为什么需要显式 Context Builder。
+- [ ] 我知道完整 Session 不应该天然等于本轮 Context。
+- [ ] 我知道无关旧历史也会占用请求 Token。
 
-做到这些，就进入 **context:02 · Explicit Context Builder**。
+### Context 02
+
+- [ ] 我能解释 `buildContext()` 为什么存在。
+- [ ] 我能解释 `ModelContext`。
+- [ ] 我知道 LLM 现在只消费最终 Context，不需要知道 Session 如何保存。
+- [ ] 我知道这一轮为什么没有减少 Token。
+- [ ] 我知道 Builder 当前仍然全量返回 Session。
+- [ ] 我知道后续 Context 逻辑应该长在 Builder 一侧，而不是 Session 持久化层。
+- [ ] 我知道下一步为什么要研究 Context Sources。
+
+做到这些，就进入 **context:03 · Context Sources**。
