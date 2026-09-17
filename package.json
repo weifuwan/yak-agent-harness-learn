@@ -65,6 +65,7 @@
     "integration:04": "node --env-file=.env --import tsx integration/04-multi-step-coding-loop/index.ts",
     "integration:05": "node --env-file=.env --import tsx integration/05-session-context-recovery/index.ts",
     "integration:06": "node --env-file=.env --import tsx integration/06-minimal-coding-agent-runtime/index.ts",
+    "openui:01": "node --env-file=.env --import tsx study/02-openui/01-no-ui-harness/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
