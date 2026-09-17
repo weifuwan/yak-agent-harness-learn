@@ -39,8 +39,8 @@ Compaction
 当前进度：
 
 ```text
-01 No Compaction              ← 当前
-02 Compaction Trigger         ← 后续
+01 No Compaction              ✅
+02 Compaction Trigger         ← 当前
 03 Hot / Cold Context         ← 后续
 04 Summarize Cold Context     ← 后续
 05 Rebuild Compacted Context  ← 后续
@@ -51,17 +51,13 @@ Compaction
 
 # Compaction 01 · No Compaction
 
-核心问题：
-
-> **Context Runtime 已经做过 Selection，但最终 Model Context 还是超过预算，会发生什么？**
-
 运行：
 
 ```bash
 npm run compaction:01
 ```
 
-这一轮直接复用上一章已经完成的 Context Runtime：
+这一轮复用 Context Runtime：
 
 ```text
 Session
@@ -75,144 +71,166 @@ Safe Context Units
 Model Context
 ```
 
-默认构造：
+默认场景已经只选择最近 12 个 Unit，但这些必须保留的内容本身仍然超过演示 Budget。
+
+所以第一次看到：
 
 ```text
-Session
-= 20 个 Context Unit
+Selection 已经正确
++
+Context 仍然 Overflow
 ```
 
-Context Policy 已经选择：
+记成：
 
 ```text
-recent_units:12
-```
-
-所以不是把 20 个全部发送，而是：
-
-```text
-20 Units
-↓
-Context Selection
-↓
-12 Units
-```
-
-但这 12 个 Unit 本身内容就很长。
-
-这一轮再用一个学习版大小估算：
-
-```text
-estimated tokens ≈ characters / 4
-```
-
-和固定演示预算比较：
-
-```text
-Token Budget = 2000
-```
-
-重点观察：
-
-```text
-selected units
-selected history messages
-estimated tokens
-token budget
-within budget
-```
-
-如果输出：
-
-```text
-within budget: false
-```
-
-就说明问题已经出现。
-
----
-
-## 为什么这不是 Context Selection 的问题？
-
-因为当前已经明确：
-
-```text
-最近 12 个 Unit
-= 当前任务仍然需要保留的信息
-```
-
-如果继续简单：
-
-```text
-12 → 5
-```
-
-虽然 Context 会变短，但可能直接丢掉仍然需要的事实。
-
-所以：
-
-```text
-Selection
-= 某些信息不进入 Context
-
-Compaction
-= 信息仍然进入，但换成更短的表示
-```
-
-这一轮不实现压缩，只先把这个边界看清楚。
-
-可以记成：
-
-```text
-01 = Overflow Problem
+01 = Problem
 ```
 
 详细：[`01-no-compaction/README.md`](./01-no-compaction/README.md)
 
 ---
 
-## 为什么下一步是 Compaction Trigger？
+# Compaction 02 · Compaction Trigger
 
-现在已经看到：
+核心问题：
+
+> **什么时候应该正式进入 Compaction？**
+
+运行：
+
+```bash
+npm run compaction:02
+```
+
+这一轮第一次把“人工看到超预算”变成 Runtime 判断：
+
+```ts
+shouldCompact(estimatedTokens, tokenBudget)
+```
+
+流程：
 
 ```text
 Model Context
 ↓
-可能超过预算
+estimateContextTokens()
+↓
+shouldCompact()
+↓
+├── false → CONTINUE
+└── true  → COMPACT
 ```
 
-新的问题是：
+默认运行两个对照场景。
 
-> **什么时候应该启动 Compaction？**
+### Case A · Within Budget
 
-不能每次请求都压缩，也不能等模型调用已经失败以后才临时处理。
+```text
+较小 Context
+↓
+estimatedTokens <= budget
+↓
+shouldCompact = false
+↓
+CONTINUE
+```
+
+### Case B · Over Budget
+
+```text
+较大 Context
+↓
+estimatedTokens > budget
+↓
+shouldCompact = true
+↓
+COMPACT
+```
+
+注意：
+
+```text
+COMPACT
+```
+
+现在只是**决策结果**。
+
+这一轮没有真正修改 Context，也没有生成 Summary。
+
+记成：
+
+```text
+02 = Trigger
+```
+
+详细：[`02-compaction-trigger/README.md`](./02-compaction-trigger/README.md)
+
+---
+
+## 前两轮连起来
+
+```text
+compaction:01
+Context 超预算
+↓
+Problem
+
+compaction:02
+Runtime 判断是否超预算
+↓
+Trigger
+```
+
+也就是：
+
+```text
+01 = Problem
+02 = Trigger
+```
+
+---
+
+## 为什么下一步是 Hot / Cold Context？
+
+现在 Runtime 已经可以得到：
+
+```text
+shouldCompact = true
+```
+
+新的问题马上出现：
+
+> **既然要压，所有 Context 都一起压吗？**
+
+最近正在工作的历史通常需要保持原样，而较旧但仍重要的信息才更适合压缩。
 
 所以下一轮进入：
 
 ```text
-compaction:02 · Compaction Trigger
+compaction:03 · Hot / Cold Context
 ```
 
-第一次引入类似：
+第一次把已经选中的 Context Units 拆成：
 
 ```text
-estimate size
-↓
-compare budget
-↓
-should compact?
+Cold Units
+= 较旧，可考虑压缩
+
+Hot Units
+= 最近正在使用，原样保留
 ```
 
-但 `compaction:01` 暂时不提前实现这个判断函数。
+这一轮仍然不会真正 Summary。
 
 ---
 
-## 当前不进入
+## 当前仍然不进入
 
 ```text
-Hot / Cold
 Summary
 LLM Compaction
+Context Rebuild
 多级摘要
 RAG
 Embedding
@@ -220,20 +238,23 @@ Embedding
 复杂 Provider Tokenizer
 ```
 
-这些等问题真正出现以后再逐步引入。
-
 ---
 
 ## 当前 Done 标准
 
 ### Compaction 01
 
-- [ ] 我能区分 Context Selection 和 Compaction。
-- [ ] 我知道 Selection 已经完成后，Context 仍然可能超过预算。
-- [ ] 我知道继续减少 Unit 可能会丢失仍然需要的信息。
-- [ ] 我知道 Compaction 的方向不是“再删一些”，而是“更短地表示”。
-- [ ] 我知道当前 Token 只是学习版估算，不是 Provider 精确 tokenizer。
-- [ ] 我知道这一轮没有实现任何压缩。
-- [ ] 我知道下一步为什么要研究 Compaction Trigger。
+- [ ] 我知道 Selection 完成后 Context 仍然可能太长。
+- [ ] 我能区分 Selection 和 Compaction。
 
-做到这些，就进入 **compaction:02 · Compaction Trigger**。
+### Compaction 02
+
+- [ ] 我能解释 `shouldCompact()` 为什么存在。
+- [ ] 我知道 Budget 是工程使用额度，不是模型物理上限。
+- [ ] 我知道 `estimatedTokens <= budget` 时继续正常流程。
+- [ ] 我知道 `estimatedTokens > budget` 时进入 Compaction 分支。
+- [ ] 我知道 Trigger 只回答“该不该压”，不回答“怎么压”。
+- [ ] 我知道当前 Token 仍是学习版近似估算。
+- [ ] 我知道下一步为什么需要区分 Hot / Cold Context。
+
+做到这些，就进入 **compaction:03 · Hot / Cold Context**。
