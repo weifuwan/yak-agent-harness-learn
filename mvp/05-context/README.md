@@ -2,7 +2,7 @@
 
 > 核心问题：**Session 保存了全部历史，但这一轮模型到底应该看到什么？**
 
-当前原则：**先让问题暴露，再让 Context Builder、Sources、Selection 一层层自然长出来。**
+当前原则：**先让问题暴露，再让 Builder、Sources、Selection、Safe Units 一层层自然长出来。**
 
 当前状态：`LEARNING`
 
@@ -30,14 +30,14 @@
 01 Full Session As Context   ✅
 02 Explicit Context Builder  ✅
 03 Context Sources           ✅
-04 History Selection         ← 当前
-05 Safe Context Units        ← 后续
+04 History Selection         ✅
+05 Safe Context Units        ← 当前
 06 Minimal Context Runtime   ← 后续
 ```
 
 ---
 
-## Session 和 Context 的边界
+## Session 和 Context
 
 ```text
 Session
@@ -47,354 +47,317 @@ Context
 = 本轮实际发送给模型的信息
 ```
 
-Session 可以长期保存：
+所以：
 
-```text
-user
-assistant(tool_call)
-tool(result)
-assistant
-...
-```
-
-但这不代表每次 LLM Request 都应该把全部历史重新发送。
+> **完整保存，不等于全部发送。**
 
 ---
 
 # Context 01 · Full Session As Context
 
-核心问题：**直接把完整 Session 当作 Model Context，会发生什么？**
-
-运行：
-
 ```bash
 npm run context:01
 ```
 
-默认对比：
+故意让：
 
 ```text
-0 个旧 Turn
-10 个旧 Turn
-30 个旧 Turn
-```
-
-当前任务完全相同，变化的只有旧 Session 历史数量。
-
-策略故意写成：
-
-```ts
-const requestMessages = [
-  system,
-  ...session.messages,
-  currentUser,
-]
-```
-
-所以：
-
-```text
-Session 有多少
+Session 有多少历史
 ↓
 Context 就塞多少
 ```
 
-这一轮要看到：
+看到第一个问题：
 
-> **Session 负责保存，但不应该顺便决定本轮模型看到什么。**
+> **Session 负责保存，但不应该顺便决定模型本轮看到什么。**
 
-可以记成：
+记成：
 
 ```text
 01 = Full Session
 ```
 
-详细说明：[`01-full-session-as-context/README.md`](./01-full-session-as-context/README.md)
+详细：[`01-full-session-as-context/README.md`](./01-full-session-as-context/README.md)
 
 ---
 
 # Context 02 · Explicit Context Builder
 
-核心问题：**Session 和 Model Context 怎么在代码里真正分开？**
-
-第一次引入：
-
-```ts
-buildContext()
-```
-
-结构从：
-
-```text
-Session
-↓
-Runtime 直接拼 messages
-↓
-LLM
-```
-
-变成：
-
-```text
-Session
-↓
-buildContext()
-↓
-ModelContext
-↓
-LLM
-```
-
-运行：
-
 ```bash
 npm run context:02
 ```
 
-这一轮行为故意不变：`buildContext()` 仍然全量返回 Session。
+第一次引入：
 
-所以它没有解决 Token 增长，只解决了职责边界：
+```text
+Session
+↓
+buildContext()
+↓
+Model Context
+↓
+LLM
+```
 
-> **保存什么，和发送什么，先拥有不同的代码入口。**
+行为暂时不变，但职责正式分开。
 
-可以记成：
+记成：
 
 ```text
 02 = Builder
 ```
 
-详细说明：[`02-explicit-context-builder/README.md`](./02-explicit-context-builder/README.md)
+详细：[`02-explicit-context-builder/README.md`](./02-explicit-context-builder/README.md)
 
 ---
 
 # Context 03 · Context Sources
 
-核心问题：**Context Builder 除了 Session History，还应该从哪里获得信息？**
-
-这一轮第一次明确多个来源：
-
-```ts
-type ContextSources = {
-  systemPrompt: string
-  currentTask: string
-  sessionHistory: Message[]
-  projectContext?: string
-}
-```
-
-结构变成：
-
-```text
-System Prompt ───────┐
-Current Task ────────┤
-Session History ─────┼→ Context Builder → Model Context → LLM
-Project Context ─────┘
-```
-
-运行：
-
 ```bash
 npm run context:03
 ```
 
-这一轮最重要的认识：
+Context 不再只理解成聊天历史，而是多个来源：
 
-> **Context 不等于聊天历史，而是完成本轮任务所需要的多种信息源的组合。**
+```text
+System Prompt ───────┐
+Current Task ────────┤
+Session History ─────┼→ Context Builder → Model Context
+Project Context ─────┘
+```
 
-Session 只是其中一个 Source。
-
-可以记成：
+记成：
 
 ```text
 03 = Sources
 ```
 
-详细说明：[`03-context-sources/README.md`](./03-context-sources/README.md)
+详细：[`03-context-sources/README.md`](./03-context-sources/README.md)
 
 ---
 
 # Context 04 · History Selection
 
-核心问题：**Session History 很长以后，这一轮到底应该选择哪些历史进入 Context？**
-
-这一轮第一次引入最小 Selection Policy：
-
-```ts
-type HistorySelectionPolicy =
-  | { type: "all" }
-  | { type: "recent"; maxMessages: number }
-```
-
-运行：
-
 ```bash
 npm run context:04
 ```
 
-默认 Session 构造：
+第一次引入 Selection Policy：
 
 ```text
-20 个历史 Turn
-=
-40 条历史消息
-```
-
-当前任务始终一样：
-
-```text
-请告诉我最近一次出现的 HISTORY 编号
-```
-
-对比两种策略：
-
-```text
-Case A
 all
-↓
-40 条 Session History 全部进入 Context
 ```
 
-以及：
+和：
 
 ```text
-Case B
-recent:6
-↓
-只有最近 6 条 Session History 进入 Context
+recent:N
 ```
 
-重点观察：
+于是：
 
 ```text
-session messages
-selected history
-context messages
-prompt_tokens
-answer
+完整 Session
+↓
+只选择最近一部分历史
+↓
+Model Context
 ```
 
-Session 本身仍然完整保存 40 条消息。
+这一轮解决：
 
-变化的只是：
+> **选多少？**
+
+记成：
 
 ```text
-本轮 Context 消费多少历史
+04 = Quantity
 ```
 
-所以这一轮第一次真正建立：
-
-> **Session 可以完整保存，而 Context 可以选择性消费。**
-
-可以记成：
-
-```text
-04 = Selection
-```
-
-详细说明：[`04-history-selection/README.md`](./04-history-selection/README.md)
-
----
-
-## 四轮先连起来
-
-```text
-context:01
-Session 全部直接进入 LLM
-↓
-发现保存历史 ≠ 合理输入
-
-context:02
-加入 Context Builder
-↓
-让“本轮输入”有独立构建入口
-
-context:03
-Context Builder 接收多个 Sources
-↓
-Context 不再等于 Session History
-
-context:04
-History Selection Policy
-↓
-Session 完整保存，但 Context 选择性消费
-```
-
-也就是：
-
-```text
-01 = Full Session
-02 = Builder
-03 = Sources
-04 = Selection
-```
-
----
-
-## 当前 Selection 的缺陷
-
-当前最近历史策略只是：
+但学习版实现只是：
 
 ```ts
 history.slice(-N)
 ```
 
-它按“消息数量”直接切。
+它可能把 Tool Call / Tool Result 从中间切断。
 
-但真实 Agent History 可能包含：
-
-```text
-user
-assistant(tool_call id=123)
-tool(tool_call_id=123)
-assistant(final)
-```
-
-如果刚好从中间切：
-
-```text
-tool(result)
-assistant(final)
-```
-
-前面的：
-
-```text
-assistant(tool_call)
-```
-
-可能已经丢了。
-
-于是 Context 虽然变短，但结构已经不完整。
-
-这个问题这一轮故意不解决。
+详细：[`04-history-selection/README.md`](./04-history-selection/README.md)
 
 ---
 
-## 为什么下一步是 Safe Context Units？
+# Context 05 · Safe Context Units
 
-现在已经会：
+```bash
+npm run context:05
+```
+
+核心问题：
+
+> **怎么选历史，才能不把有结构依赖的消息切坏？**
+
+这一轮第一次引入：
+
+```ts
+type ContextUnit = {
+  messages: SessionMessage[]
+}
+```
+
+最小规则：
+
+> **一次 user 发起，到下一次 user 发起之前，视为一个完整 Context Unit。**
+
+普通对话：
 
 ```text
-完整 Session
+Unit
+├── user
+└── assistant
+```
+
+Tool 对话：
+
+```text
+Unit
+├── user
+├── assistant(tool_call)
+├── tool(result)
+└── assistant(final)
+```
+
+流程变成：
+
+```text
+Session Messages
 ↓
-选择最近 N 条
+groupIntoContextUnits()
+↓
+Context Units
+↓
+selectRecentUnits()
+↓
+flattenUnits()
 ↓
 Model Context
 ```
 
-新的问题是：
-
-> **历史到底应该按“消息”切，还是按某种完整逻辑单元切？**
-
-所以下一轮进入：
+默认实验会故意对比：
 
 ```text
-context:05 · Safe Context Units
+坏方案：slice(-2)
+↓
+tool(result)
+assistant(final)
 ```
 
-专门解决 Tool Call / Tool Result、User Turn 等结构如何成组保留。
+和：
 
-暂时仍然不进入：
+```text
+安全方案：recent_units:1
+↓
+user
+assistant(tool_call)
+tool(result)
+assistant(final)
+```
+
+同时做最小校验：
+
+```text
+tool(tool_call_id=X)
+```
+
+必须在同一个 Unit 前面找到：
+
+```text
+assistant(tool_call id=X)
+```
+
+否则视为：
+
+```text
+orphan tool result
+```
+
+这一轮解决：
+
+> **怎么选才不会切坏？**
+
+记成：
+
+```text
+05 = Integrity
+```
+
+详细：[`05-safe-context-units/README.md`](./05-safe-context-units/README.md)
+
+---
+
+## 五轮连起来
+
+```text
+01 Full Session
+= 全塞
+
+02 Builder
+= 谁负责构建
+
+03 Sources
+= Context 从哪里来
+
+04 Selection
+= 选多少
+
+05 Safe Units
+= 怎么选才不会切坏
+```
+
+也可以直接记：
+
+```text
+04 = Quantity
+05 = Integrity
+```
+
+---
+
+## 为什么下一步是 Minimal Context Runtime？
+
+现在已经分别学过：
+
+```text
+Sources
+Builder
+Selection
+Safe Units
+```
+
+但这些还是散开的概念。
+
+下一轮：
+
+```text
+context:06 · Minimal Context Runtime
+```
+
+会把它们收成一个最小完整入口：
+
+```text
+Context Sources
+↓
+Context Policy
+↓
+Safe Unit Selection
+↓
+Context Builder
+↓
+Model Context
+↓
+LLM
+```
+
+仍然不进入：
 
 ```text
 Compaction
@@ -404,34 +367,20 @@ RAG
 复杂 Token Budget
 ```
 
+这些留给下一阶段。
+
 ---
 
 ## 当前 Done 标准
 
-### Context 01
+### Context 05
 
-- [ ] 我能区分 Session 和 Context。
-- [ ] 我知道完整 Session 不应该天然等于本轮 Context。
+- [ ] 我知道为什么 `slice(-N)` 可能切坏 Agent History。
+- [ ] 我能解释 Context Unit。
+- [ ] 我知道 Tool Call / Tool Result 不能随便拆开。
+- [ ] 我知道 Selection 可以按 Unit，而不是按 Message。
+- [ ] 我能解释 `groupIntoContextUnits()` / `selectRecentUnits()` / `flattenUnits()`。
+- [ ] 我知道 `04 = Quantity`，`05 = Integrity`。
+- [ ] 我知道下一步为什么要收成 Minimal Context Runtime。
 
-### Context 02
-
-- [ ] 我能解释 `buildContext()` 为什么存在。
-- [ ] 我知道 Builder 是“发送什么”的独立入口。
-
-### Context 03
-
-- [ ] 我知道 Context 可以来自多个 Sources。
-- [ ] 我知道 Session History 只是其中一个 Source。
-
-### Context 04
-
-- [ ] 我能解释 History Selection Policy。
-- [ ] 我能区分 `all / recent`。
-- [ ] 我知道 Selection 不等于删除 Session History。
-- [ ] 我知道 Session 可以完整保存，而 Context 只消费一部分。
-- [ ] 我知道最近 N 条可以减少本轮 Context 和 prompt token 消耗。
-- [ ] 我知道 `history.slice(-N)` 只是最小学习实现。
-- [ ] 我知道直接按消息切可能破坏 Tool Call / Tool Result 的结构完整性。
-- [ ] 我知道下一步为什么需要 Safe Context Units。
-
-做到这些，就进入 **context:05 · Safe Context Units**。
+做到这些，就进入 **context:06 · Minimal Context Runtime**。
