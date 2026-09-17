@@ -280,13 +280,13 @@ mvp/xx-name/
 [x] 01 LLM
 [x] 02 Tool
 [x] 03 Agent Loop
-[ ] 04 Session        ← next
-[ ] 05 Context
+[x] 04 Session
+[ ] 05 Context        ← next
 [ ] 06 Compaction
 [ ] 07 Permission
 [ ] 08 Recovery
 ```
 
-当前进入 **04 · Session MVP**。
+当前进入 **05 · Context MVP**。
 
 > 不是为了更快写出 Agent，而是为了真正知道 Agent 为什么这样工作。
