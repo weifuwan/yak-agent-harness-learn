@@ -39,8 +39,8 @@ Compaction
 ```text
 01 No Compaction              ✅
 02 Compaction Trigger         ✅
-03 Hot / Cold Context         ← 当前
-04 Summarize Cold Context     ← 后续
+03 Hot / Cold Context         ✅
+04 Summarize Cold Context     ← 当前
 05 Rebuild Compacted Context  ← 后续
 06 Minimal Compaction Runtime ← 后续
 ```
@@ -55,7 +55,7 @@ Compaction
 npm run compaction:01
 ```
 
-这一轮故意不压缩，只稳定制造：
+故意制造：
 
 ```text
 Context Selection 已经完成
@@ -87,24 +87,11 @@ npm run compaction:02
 shouldCompact(estimatedTokens, tokenBudget)
 ```
 
-流程：
+只回答：
 
 ```text
-Model Context
-↓
-estimateContextTokens()
-↓
-shouldCompact()
-↓
-├── false → CONTINUE
-└── true  → COMPACT
+要不要压？
 ```
-
-这一轮只回答：
-
-> **要不要压？**
-
-没有修改 Context，也没有生成 Summary。
 
 所以：
 
@@ -118,80 +105,29 @@ shouldCompact()
 
 # 03 · Hot / Cold Context
 
-核心问题：
-
-> **已经决定要 Compact 了，到底压哪些内容？**
-
 运行：
 
 ```bash
 npm run compaction:03
 ```
 
-这一轮第一次把 Selected Context Units 分成：
+把已经选中的 Context Units 分成：
 
 ```text
 Cold Units
 = 较旧，但仍然需要
-= 后续允许考虑压缩
+= 后续允许压缩
 
 Hot Units
 = 最近正在工作
-= 当前原样保留
+= 原样保留
 ```
 
-最小 API：
-
-```ts
-splitHotCold(units, keepHotUnits)
-```
-
-默认场景：
+只回答：
 
 ```text
-Selected Units = 10
-Keep Hot Units = 3
+压谁？
 ```
-
-得到：
-
-```text
-Cold = 7
-Hot  = 3
-```
-
-当前完整流程：
-
-```text
-Context Runtime
-↓
-Selected Context
-↓
-estimateContextTokens()
-↓
-shouldCompact() = true
-↓
-groupHistoryIntoUnits()
-↓
-splitHotCold()
-↓
-├── Cold Units
-└── Hot Units
-```
-
-注意：这一轮只有 **Partition**。
-
-没有：
-
-```text
-删除 Cold
-修改 Cold
-Summary
-LLM Compaction
-Context Rebuild
-```
-
-Cold 仍然完整存在，只是变成下一轮的压缩候选。
 
 所以：
 
@@ -199,66 +135,153 @@ Cold 仍然完整存在，只是变成下一轮的压缩候选。
 03 = Partition
 ```
 
-或者直接记：
-
-```text
-02 = 要不要压
-03 = 压谁
-```
-
 详细：[`03-hot-cold-context/README.md`](./03-hot-cold-context/README.md)
 
 ---
 
-## 三轮连起来
+# 04 · Summarize Cold Context
 
-```text
-01 Problem
-= Context 已经 Selection，但仍然太长
+核心问题：
 
-02 Trigger
-= 判断是否需要进入 Compaction
+> **Cold Units 已经确定了，怎么把它们换成更短的表示，同时尽量保住继续执行需要的事实？**
 
-03 Partition
-= 决定哪些 Unit 可以压，哪些保持原样
+运行：
+
+```bash
+npm run compaction:04
 ```
 
----
-
-## 为什么下一步是 Summarize Cold Context？
-
-现在已经得到：
-
-```text
-Cold Units
-Hot Units
-```
-
-但 Cold 目前仍然是完整原文，一点都没有变短。
-
-所以下一轮进入：
-
-```text
-compaction:04 · Summarize Cold Context
-```
-
-第一次真正执行：
+这一轮第一次真正发生信息压缩：
 
 ```text
 Cold Units
 ↓
-更短的 Summary
+LLM Summary
+↓
+Compacted Cold Summary
 ```
 
-而 Hot Units 继续原样保留。
+Hot Units 完全保持原样：
+
+```text
+Cold → 压缩
+Hot  → 不动
+```
+
+默认实验会在 Cold 中故意放入：
+
+```text
+IMPORTANT-CONSTRAINT-0401
+```
+
+然后同时观察：
+
+```text
+before tokens
+summary tokens
+key fact preserved
+```
+
+因为：
+
+```text
+变短
+≠
+语义压缩成功
+```
+
+如果 Summary 很短，但：
+
+```text
+IMPORTANT-CONSTRAINT-0401
+```
+
+丢失了，就说明只是长度成功，语义失败。
+
+所以这一轮真正学习的是：
+
+> **Compaction 要同时追求“更短”和“关键状态仍然可用”。**
+
+记成：
+
+```text
+04 = Compress
+```
+
+详细：[`04-summarize-cold-context/README.md`](./04-summarize-cold-context/README.md)
+
+---
+
+## 四轮连起来
+
+```text
+01 Problem
+= 太长了
+
+02 Trigger
+= 要不要压
+
+03 Partition
+= 压谁
+
+04 Compress
+= 真正把 Cold 换成更短表示
+```
+
+也就是：
+
+```text
+01 = Problem
+02 = Trigger
+03 = Partition
+04 = Compress
+```
+
+---
+
+## 为什么下一步是 Rebuild Compacted Context？
+
+现在手里已经有：
+
+```text
+Compacted Cold Summary
++
+Hot Units
+```
+
+但还没有真正得到新的：
+
+```text
+ModelContext
+```
+
+所以当前压缩结果还不能直接代替原来的完整请求结构。
+
+下一轮进入：
+
+```text
+compaction:05 · Rebuild Compacted Context
+```
+
+第一次正式把：
+
+```text
+System
+Project Context
+Cold Summary
+Hot Units
+Current Task
+```
+
+重新组装成下一次可以直接发给 LLM 的 Context。
 
 ---
 
 ## 当前仍然不进入
 
 ```text
-Context Rebuild
 多级摘要
+增量摘要树
 RAG
 Embedding
 长期 Memory
@@ -269,25 +292,15 @@ Embedding
 
 ## 当前 Done 标准
 
-### Compaction 01
+### Compaction 04
 
-- [ ] 我知道 Selection 完成后 Context 仍然可能太长。
-- [ ] 我能区分 Selection 和 Compaction。
+- [ ] 我知道 `04` 是第一次真正压缩内容。
+- [ ] 我知道为什么只压 Cold、不动 Hot。
+- [ ] 我能解释 `summarizeColdUnits()`。
+- [ ] 我知道 Compaction 不等于删除历史。
+- [ ] 我知道“变短”不代表“语义成功”。
+- [ ] 我知道需要验证重要约束、决定、Tool Result 是否仍然存在。
+- [ ] 我知道这一轮还没有重建最终 ModelContext。
+- [ ] 我知道下一步为什么是 Rebuild Compacted Context。
 
-### Compaction 02
-
-- [ ] 我能解释 `shouldCompact()`。
-- [ ] 我知道 Trigger 只回答“该不该压”。
-
-### Compaction 03
-
-- [ ] 我能解释 Hot Context 和 Cold Context。
-- [ ] 我知道为什么整个 Context 不应该无差别一起压。
-- [ ] 我知道 Cold 不是删除，而是压缩候选。
-- [ ] 我知道 Hot Units 当前原样保留。
-- [ ] 我能解释 `splitHotCold()`。
-- [ ] 我知道这一轮没有真正生成 Summary。
-- [ ] 我知道 `02 = Trigger`，`03 = Partition`。
-- [ ] 我知道下一步为什么只压缩 Cold Units。
-
-做到这些，就进入 **compaction:04 · Summarize Cold Context**。
+做到这些，就进入 **compaction:05 · Rebuild Compacted Context**。
