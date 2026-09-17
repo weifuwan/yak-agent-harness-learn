@@ -57,6 +57,7 @@
     "recovery:02": "node --import tsx mvp/08-recovery/02-retry/index.ts",
     "recovery:03": "node --import tsx mvp/08-recovery/03-run-state/index.ts",
     "recovery:04": "node --import tsx mvp/08-recovery/04-checkpoint-snapshot/index.ts",
+    "recovery:05": "node --import tsx mvp/08-recovery/05-resume-rollback/index.ts",
     "mvp:llm": "node --env-file=.env --import tsx mvp/01-llm/src/index.ts",
     "test:llm": "node --import tsx --test mvp/01-llm/test/llm.test.ts",
     "mvp:tool": "tsx mvp/02-tool/src/index.ts",
