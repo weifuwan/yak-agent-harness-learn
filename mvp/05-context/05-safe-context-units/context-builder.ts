@@ -21,8 +21,15 @@ export type ContextSources = {
   historySelection: HistorySelectionPolicy
 }
 
+export type ModelMessage =
+  | {
+      role: "system"
+      content: string
+    }
+  | SessionMessage
+
 export type ModelContext = {
-  messages: SessionMessage[]
+  messages: ModelMessage[]
   history: {
     totalMessages: number
     totalUnits: number
@@ -45,8 +52,8 @@ export function buildContext(sources: ContextSources): ModelContext {
   return {
     messages: [
       {
-        role: "assistant",
-        content: `[System]\n${sources.systemPrompt}`,
+        role: "system",
+        content: sources.systemPrompt,
       },
       ...selectedHistory,
       {
