@@ -47,8 +47,8 @@ Recovery
 ```text
 01 No Recovery                 ✅
 02 Retry                       ✅
-03 Run State                   ← 当前
-04 Checkpoint / Snapshot       ← 后续
+03 Run State                   ✅
+04 Checkpoint / Snapshot       ← 当前
 05 Resume / Rollback           ← 后续
 06 Minimal Recovery Runtime    ← 后续
 ```
@@ -61,15 +61,7 @@ Recovery
 npm run recovery:01
 ```
 
-故意让：
-
-```text
-Step 1 success
-Step 2 success
-Step 3 failed
-```
-
-失败后没有恢复状态，只能天真地整段重跑，已成功副作用可能重复。
+失败后没有恢复状态，天真地整段重跑会重复已经成功的副作用。
 
 ```text
 01 = Failure
@@ -87,21 +79,13 @@ npm run recovery:02
 
 第一次引入：
 
-```ts
-retryOperation(operation, {
-  maxAttempts: 3,
-})
-```
-
-只解决：
-
 ```text
 当前 Operation 失败
 ↓
 有限次再试
 ```
 
-它还不知道整个 Run 做到哪里。
+Retry 只解决当前 Step，不知道整个 Run 做到哪里。
 
 ```text
 02 = Retry
@@ -113,26 +97,13 @@ retryOperation(operation, {
 
 # 03 · Run State
 
-核心问题：
-
-> **Retry 只知道当前 Operation 试了几次，整个 Run 到底执行到哪一步，谁来记录？**
-
-运行：
-
 ```bash
 npm run recovery:03
 ```
 
-这一轮第一次引入：
-
-```ts
-RunState
-```
-
-最小状态：
+第一次记录：
 
 ```text
-runId
 run status
 currentStepId
 lastError
@@ -148,83 +119,16 @@ success
 failed
 ```
 
-默认实验：
+所以 Runtime 第一次知道：
 
 ```text
-Step 1 · write A
-→ success
-
-Step 2 · write B
-→ success
-
-Step 3 · run test
-→ Retry 2 次
-→ failed
-
-Step 4 · write report
-→ pending
+做到哪一步
+哪些成功
+哪一步失败
+哪些还没执行
 ```
 
-最终：
-
-```text
-run status   = failed
-current step = step-03
-
-step-01 = success
-step-02 = success
-step-03 = failed
-step-04 = pending
-```
-
-所以 Runtime 第一次能回答：
-
-```text
-做到哪一步？
-哪些已经成功？
-哪一步失败？
-哪些还没执行？
-```
-
-### Retry 和 Run State 的区别
-
-```text
-Retry
-= 当前 Step 试了几次
-```
-
-```text
-Run State
-= 整个 Run 现在是什么状态
-```
-
-### Session 和 Run State 也不同
-
-```text
-Session
-= Agent 的完整交互历史
-
-Run State
-= 一次任务执行的步骤状态
-```
-
-当前 `RunState` 只是内存对象：
-
-```text
-进程退出
-↓
-状态仍然会丢
-```
-
-这一轮还不会：
-
-```text
-Resume
-Rollback
-Checkpoint / Snapshot
-自动跳过 success Step
-持久化 Run State
-```
+但 Run State 只保存执行状态，不知道文件修改前是什么样。
 
 ```text
 03 = State
@@ -234,7 +138,101 @@ Checkpoint / Snapshot
 
 ---
 
-## 三轮连起来
+# 04 · Checkpoint / Snapshot
+
+核心问题：
+
+> **Run State 已经知道哪里失败，但失败以后如果想恢复，副作用发生前的世界是什么样？**
+
+运行：
+
+```bash
+npm run recovery:04
+```
+
+这一轮第一次引入：
+
+```ts
+RecoveryCheckpoint
+├── id
+└── files[]
+    ├── path
+    └── content
+```
+
+默认实验：
+
+```text
+初始：
+A = OLD-A
+B = OLD-B
+
+↓ Create Checkpoint
+
+Snapshot:
+A = OLD-A
+B = OLD-B
+
+↓ Execute
+
+Step 1 → A = NEW-A → success
+Step 2 → B = NEW-B → success
+Step 3 → failed
+Step 4 → pending
+```
+
+失败以后：
+
+```text
+Current:
+A = NEW-A
+B = NEW-B
+
+Snapshot:
+A = OLD-A
+B = OLD-B
+```
+
+所以：
+
+```text
+Run State
+= 我执行到哪了
+
+Snapshot
+= 当时世界是什么样
+```
+
+也就是：
+
+```text
+State
+→ 恢复流程判断
+
+Snapshot
+→ 恢复数据材料
+```
+
+这一轮故意不执行 Rollback。
+
+文件仍然保持：
+
+```text
+A = NEW-A
+B = NEW-B
+```
+
+因为真正恢复旧状态要留给下一轮。
+
+```text
+04 = Checkpoint
+```
+
+详细：[`04-checkpoint-snapshot/README.md`](./04-checkpoint-snapshot/README.md)
+
+---
+
+## 四轮连起来
 
 ```text
 01 = Failure
@@ -244,72 +242,74 @@ Checkpoint / Snapshot
 同一步有限次再试
 
 03 = State
-记录整个 Run 执行到哪
+知道整个 Run 做到哪
+
+04 = Checkpoint
+保存恢复所需的旧世界状态
 ```
 
 ---
 
-## 为什么下一步是 Checkpoint / Snapshot？
+## 为什么下一步是 Resume / Rollback？
 
-现在已经知道：
-
-```text
-Step 1 success
-Step 2 success
-Step 3 failed
-```
-
-但如果 Step 2 修改了文件，Run State 只能告诉我们：
+现在我们同时拥有：
 
 ```text
-Step 2 成功执行过
+Run State
++
+Checkpoint
 ```
 
-它不知道：
+所以终于可以真正问：
 
 ```text
-Step 2 执行之前，文件原来是什么内容？
+失败以后，是继续往前跑？
+还是恢复到旧状态？
 ```
 
-所以即使知道失败在哪，也还没有足够的信息 Rollback。
+这就是：
+
+```text
+Resume
+= 从失败点继续
+
+Rollback
+= 回到 Checkpoint
+```
 
 下一轮进入：
 
 ```text
-recovery:04 · Checkpoint / Snapshot
+recovery:05 · Resume / Rollback
 ```
-
-第一次保存“副作用发生前的世界状态”。
 
 ---
 
 ## 当前仍然不进入
 
 ```text
-Resume
-Rollback
-持久化 Run State
-复杂 Retry Backoff
-Jitter
-Idempotency Key
+真正 Rollback
+自动 Resume
+Snapshot 持久化
+Run State 持久化
+Git Snapshot
 事务
 Saga
+复杂 Retry Backoff
 ```
 
 ---
 
 ## 当前 Done 标准
 
-### Recovery 03
+### Recovery 04
 
-- [ ] 我能解释 Retry 和 Run State 的区别。
-- [ ] 我知道 Run State 需要记录 Run 和 Step 两层状态。
-- [ ] 我知道失败后剩余 Step 应保持 pending。
-- [ ] 我能从 Run State 看出当前失败点。
-- [ ] 我知道 Session 不等于 Run State。
-- [ ] 我知道“知道执行到哪”还不等于“已经能 Resume”。
-- [ ] 我知道 Run State 不能恢复文件修改前的内容。
-- [ ] 我知道 `01 = Failure`、`02 = Retry`、`03 = State`。
-- [ ] 我知道下一步为什么需要 Checkpoint / Snapshot。
+- [ ] 我能解释 Run State 和 Snapshot 的区别。
+- [ ] 我知道 Snapshot 必须在副作用发生前创建。
+- [ ] 我知道失败以后 Current State 可以和 Snapshot 不同。
+- [ ] 我知道 Snapshot 保存的是恢复材料，而不是执行流程。
+- [ ] 我知道有 Snapshot 不等于已经 Rollback。
+- [ ] 我知道 `03 = State`，`04 = Checkpoint`。
+- [ ] 我知道下一步为什么自然进入 Resume / Rollback。
 
-做到这些，就进入 **recovery:04 · Checkpoint / Snapshot**。
+做到这些，就进入 **recovery:05 · Resume / Rollback**。
