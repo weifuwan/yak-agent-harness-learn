@@ -46,13 +46,13 @@ answer
 ```text
 LLM
 ↓
-Tool Call ?
+Tool Call(s) ?
 ├── read_file
 ├── write_file
 ├── run_test
 └── no tool → final answer
 ↓
-Tool Result
+Tool Result(s)
 ↓
 LLM
 ↓
@@ -62,12 +62,60 @@ LLM
 所以：
 
 ```text
-下一步做什么
+下一步想做什么
 = LLM 根据当前 Observation 决定
 
 Tool 能不能真正执行
 = Runtime / Permission 决定
 ```
+
+---
+
+## 一个 Model Turn 可以有多个 Tool Call
+
+真实运行中，模型不一定遵守：
+
+```text
+每轮只调用一个工具
+```
+
+它可能一次返回：
+
+```text
+Assistant Turn
+├── read_file(config.ts)
+└── read_file(config.test.js)
+```
+
+所以 Runtime 不能假设：
+
+```text
+1 Model Turn = 0 / 1 Tool Call
+```
+
+当前正确模型是：
+
+```text
+1 Model Turn = 0..N Tool Calls
+```
+
+Runtime 会：
+
+```text
+收到 Tool Batch
+↓
+按顺序处理 Tool Call 1..N
+↓
+每个 Tool Call 都生成自己的 Tool Result
+↓
+整批完成
+↓
+再进入下一次 LLM Turn
+```
+
+当前学习版**不是并行执行**，而是顺序执行同一批 Tool Call。
+
+这样 Permission、副作用顺序和 trace 更容易观察。
 
 ---
 
@@ -117,19 +165,17 @@ TEST_PASSED
 
 ---
 
-## Permission 在 Loop 中的位置
+## Permission 在 Tool Batch 中的位置
 
-即使进入自由 Loop，也不能变成：
+即使一个 Assistant Turn 同时返回多个 Tool Call，也不能变成：
 
 ```text
 LLM → write_file.execute()
 ```
 
-仍然必须：
+遇到 `write_file` 仍然必须：
 
 ```text
-LLM
-↓
 write_file Tool Call
 ↓
 Permission Runtime
@@ -140,30 +186,42 @@ allow / ask / deny
 如果是 `ask`：
 
 ```text
-Loop State
+当前 Tool Batch
 ↓
-暂停
+暂停在这个 write_file
 ↓
 approval_required
+```
+
+Runtime 会保存：
+
+```text
+当前 Loop State
+当前 write_file
+同一批剩余 Tool Calls
 ```
 
 外部 approve / reject 后：
 
 ```text
-resume(pending, approval)
+resume(...)
 ↓
-把结果作为 Tool Result 放回原 Loop State
+先给当前 write_file 补 Tool Result
 ↓
-继续下一轮模型调用
+继续处理同一批剩余 Tool Calls
+↓
+整批完成后
+↓
+再调用 LLM
 ```
 
-不会从 Step 1 重跑。
+不会从 Step 1 重跑，也不会丢掉同一 Assistant Turn 里的其他 Tool Call。
 
 ---
 
 ## Loop State
 
-这一轮第一次在 Integration 中显式维护：
+这一轮在 Integration 中显式维护：
 
 ```text
 CodingLoopState
@@ -176,33 +234,47 @@ CodingLoopState
 它回答：
 
 ```text
-当前是第几轮？
+当前是第几个 Model Turn？
 模型已经看过什么？
 执行过哪些 Tool？
 下一轮应该基于哪些 Observation 继续？
 ```
 
----
-
-## 为什么还需要 maxSteps？
-
-因为模型可能不断：
+同一个 Model Turn 的多个 Tool Call：
 
 ```text
-read
-→ write
-→ test
-→ read
-→ write
-→ test
-→ ...
+step 相同
+trace 有多条
 ```
 
-所以 Runtime 仍然保留最终控制权：
+---
+
+## maxSteps 统计什么？
+
+`maxSteps` 统计：
 
 ```text
-模型决定想不想继续
-Runtime 决定最多能继续多久
+Model Turn 数量
+```
+
+不是：
+
+```text
+Tool Call 数量
+```
+
+例如：
+
+```text
+step = 1
+├── read_file(A)
+└── read_file(B)
+```
+
+仍然只是：
+
+```text
+1 个 Model Turn
 ```
 
 当前 Demo：
@@ -211,7 +283,7 @@ Runtime 决定最多能继续多久
 maxSteps = 8
 ```
 
-如果模型在最后一个 Model Turn 仍然提出 Tool Call，Runtime 会停止，不再执行这个 Tool，避免越过上限继续产生副作用。
+如果模型在最后一个 Model Turn 仍然提出一批 Tool Call，Runtime 会整批停止、不再执行，避免超过上限以后继续产生副作用。
 
 ---
 
@@ -237,23 +309,28 @@ port = 3000
 port = 8080
 ```
 
-Agent 应该自己形成类似流程：
+Agent 可能形成类似流程：
 
 ```text
-read_file(config.ts)
-↓
-write_file(config.ts)
-↓
-Permission → approve
-↓
-run_test
-↓
-TEST_PASSED
-↓
-final answer
+Model Turn 1
+├── read_file(config.ts)
+└── read_file(config.test.js)
+
+Model Turn 2
+└── write_file(config.ts)
+    ↓
+    Permission → approve
+
+Model Turn 3
+└── run_test
+    ↓
+    TEST_PASSED
+
+Model Turn 4
+└── final answer
 ```
 
-具体 Tool 顺序不是 Runtime 写死的，由模型自己决定。
+具体 Tool 顺序和每轮 Tool 数量不是 Runtime 写死的，由模型自己决定。
 
 Demo 驱动层会自动 approve 普通工作区写入，只是为了把整个 Loop 连续展示出来；Permission Runtime 本身没有自动批准能力。
 
@@ -268,11 +345,9 @@ Recovery Runtime
 进程重启恢复
 任意 shell
 Git
-多 Tool 并行调用
+Tool 并行执行
 Sub Agent
 ```
-
-这些不是这一轮的问题。
 
 ---
 
@@ -287,18 +362,19 @@ Sub Agent
 
 最重要的一句话：
 
-> **LLM 决定下一步想做什么，Runtime 决定这一步能不能安全执行，以及最多允许执行多久。**
+> **一个 Model Turn 可以提出多个 Tool Call；Runtime 必须给这一批中的每个 Tool Call 补齐结果，再让模型继续思考。**
 
 ---
 
 ## Done 标准
 
 - [ ] 我知道 03 的流程为什么仍然是写死的。
-- [ ] 我能解释真正 Agent Loop 为什么必须让模型根据 Tool Result 决定下一步。
-- [ ] 我知道 Tool Call 不等于 Tool Execution。
-- [ ] 我知道 write_file 在 Loop 中仍然必须经过 Permission。
-- [ ] 我知道 approval_required 为什么要保存 Loop State，而不是从头重跑。
-- [ ] 我知道测试失败应该作为 Observation 回给模型，而不是直接结束整个 Agent。
-- [ ] 我知道 maxSteps 为什么仍然由 Runtime 控制。
+- [ ] 我知道 LLM 应根据 Tool Result 决定下一步。
+- [ ] 我知道一个 Model Turn 可以返回多个 Tool Call。
+- [ ] 我知道同一批 Tool Call 必须全部得到对应 Tool Result 后才能进入下一轮模型调用。
+- [ ] 我知道 write_file 在 Tool Batch 中仍然必须经过 Permission。
+- [ ] 我知道 approval_required 为什么要保存当前 Tool Call 和剩余 Tool Calls。
+- [ ] 我知道 TEST_FAILED 应作为 Observation 回给模型。
+- [ ] 我知道 maxSteps 统计的是 Model Turn，不是 Tool Call。
 - [ ] 我知道 `01 = Skeleton`、`02 = Inspect`、`03 = Edit`、`04 = Loop`。
-- [ ] 我知道下一步为什么要接 Session / Context / Recovery。
+- [ ] 我知道下一步为什么需要 Session / Context / Recovery。
