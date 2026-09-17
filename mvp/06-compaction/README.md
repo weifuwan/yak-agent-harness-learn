@@ -40,16 +40,14 @@ Compaction
 01 No Compaction              ✅
 02 Compaction Trigger         ✅
 03 Hot / Cold Context         ✅
-04 Summarize Cold Context     ← 当前
-05 Rebuild Compacted Context  ← 后续
+04 Summarize Cold Context     ✅
+05 Rebuild Compacted Context  ← 当前
 06 Minimal Compaction Runtime ← 后续
 ```
 
 ---
 
 # 01 · No Compaction
-
-运行：
 
 ```bash
 npm run compaction:01
@@ -63,8 +61,6 @@ Context Selection 已经完成
 Selected Context 仍然超过 Budget
 ```
 
-所以：
-
 ```text
 01 = Problem
 ```
@@ -74,8 +70,6 @@ Selected Context 仍然超过 Budget
 ---
 
 # 02 · Compaction Trigger
-
-运行：
 
 ```bash
 npm run compaction:02
@@ -93,8 +87,6 @@ shouldCompact(estimatedTokens, tokenBudget)
 要不要压？
 ```
 
-所以：
-
 ```text
 02 = Trigger
 ```
@@ -105,13 +97,11 @@ shouldCompact(estimatedTokens, tokenBudget)
 
 # 03 · Hot / Cold Context
 
-运行：
-
 ```bash
 npm run compaction:03
 ```
 
-把已经选中的 Context Units 分成：
+把 Selected Context Units 分成：
 
 ```text
 Cold Units
@@ -129,8 +119,6 @@ Hot Units
 压谁？
 ```
 
-所以：
-
 ```text
 03 = Partition
 ```
@@ -141,17 +129,11 @@ Hot Units
 
 # 04 · Summarize Cold Context
 
-核心问题：
-
-> **Cold Units 已经确定了，怎么把它们换成更短的表示，同时尽量保住继续执行需要的事实？**
-
-运行：
-
 ```bash
 npm run compaction:04
 ```
 
-这一轮第一次真正发生信息压缩：
+第一次真正发生：
 
 ```text
 Cold Units
@@ -161,48 +143,15 @@ LLM Summary
 Compacted Cold Summary
 ```
 
-Hot Units 完全保持原样：
+Hot Units 完全不改。
+
+同时检查：
 
 ```text
-Cold → 压缩
-Hot  → 不动
+更短
++
+关键事实仍然存在
 ```
-
-默认实验会在 Cold 中故意放入：
-
-```text
-IMPORTANT-CONSTRAINT-0401
-```
-
-然后同时观察：
-
-```text
-before tokens
-summary tokens
-key fact preserved
-```
-
-因为：
-
-```text
-变短
-≠
-语义压缩成功
-```
-
-如果 Summary 很短，但：
-
-```text
-IMPORTANT-CONSTRAINT-0401
-```
-
-丢失了，就说明只是长度成功，语义失败。
-
-所以这一轮真正学习的是：
-
-> **Compaction 要同时追求“更短”和“关键状态仍然可用”。**
-
-记成：
 
 ```text
 04 = Compress
@@ -212,7 +161,102 @@ IMPORTANT-CONSTRAINT-0401
 
 ---
 
-## 四轮连起来
+# 05 · Rebuild Compacted Context
+
+核心问题：
+
+> **Cold 已经压短、Hot 已经保留，怎么重新得到一个真正可以继续调用 LLM 的 ModelContext？**
+
+运行：
+
+```bash
+npm run compaction:05
+```
+
+这一轮第一次引入：
+
+```ts
+rebuildCompactedContext(...)
+```
+
+原来：
+
+```text
+System / Project
+Cold Unit 1
+Cold Unit 2
+...
+Hot Unit 8
+Hot Unit 9
+Hot Unit 10
+Current Task
+```
+
+重建后：
+
+```text
+System / Project
++
+[Compacted Cold History]
++
+Hot Unit 8
+Hot Unit 9
+Hot Unit 10
++
+Current Task
+```
+
+Cold Summary 放在 system 侧的内部 Context 区域。
+
+Hot Units 保持原始：
+
+```text
+user
+assistant(tool_call)
+tool(result)
+assistant
+```
+
+默认实验故意让当前任务同时依赖：
+
+```text
+Cold:
+IMPORTANT-CONSTRAINT-0401
+
+Hot:
+RECENT-RESULT-0501
+```
+
+所以会验证：
+
+```text
+tokens before
+tokens after
+within budget
+cold fact present
+hot result present
+```
+
+并把 Rebuilt Context 真正发给 LLM，再检查：
+
+```text
+cold fact usable
+hot result usable
+```
+
+这一轮真正验证：
+
+> **Compaction 不只是压短，而是压完之后 Agent 还能继续工作。**
+
+```text
+05 = Rebuild
+```
+
+详细：[`05-rebuild-compacted-context/README.md`](./05-rebuild-compacted-context/README.md)
+
+---
+
+## 五轮连起来
 
 ```text
 01 Problem
@@ -225,63 +269,64 @@ IMPORTANT-CONSTRAINT-0401
 = 压谁
 
 04 Compress
-= 真正把 Cold 换成更短表示
+= 怎么把 Cold 压短
+
+05 Rebuild
+= 压完以后怎么继续用
 ```
 
 也就是：
 
 ```text
-01 = Problem
-02 = Trigger
-03 = Partition
-04 = Compress
+Model Context
+↓
+Trigger
+↓
+Hot / Cold
+↓
+Cold Summary
+↓
+Rebuild
+↓
+New Model Context
 ```
 
 ---
 
-## 为什么下一步是 Rebuild Compacted Context？
+## 为什么下一步是 Minimal Compaction Runtime？
 
-现在手里已经有：
-
-```text
-Compacted Cold Summary
-+
-Hot Units
-```
-
-但还没有真正得到新的：
+现在这些能力还是分散的：
 
 ```text
-ModelContext
+estimateContextTokens()
+shouldCompact()
+splitHotCold()
+summarizeColdUnits()
+rebuildCompactedContext()
 ```
 
-所以当前压缩结果还不能直接代替原来的完整请求结构。
-
-下一轮进入：
+下一轮：
 
 ```text
-compaction:05 · Rebuild Compacted Context
+compaction:06 · Minimal Compaction Runtime
 ```
 
-第一次正式把：
+会把它们收成一个最小入口，例如：
 
-```text
-System
-Project Context
-Cold Summary
-Hot Units
-Current Task
+```ts
+compactIfNeeded(...)
 ```
 
-重新组装成下一次可以直接发给 LLM 的 Context。
+让 Agent Runtime 不再自己编排 Compaction 内部步骤。
 
 ---
 
 ## 当前仍然不进入
 
 ```text
-多级摘要
-增量摘要树
+多级 Summary
+增量 Summary
+Summary 持久化
 RAG
 Embedding
 长期 Memory
@@ -292,15 +337,16 @@ Embedding
 
 ## 当前 Done 标准
 
-### Compaction 04
+### Compaction 05
 
-- [ ] 我知道 `04` 是第一次真正压缩内容。
-- [ ] 我知道为什么只压 Cold、不动 Hot。
-- [ ] 我能解释 `summarizeColdUnits()`。
-- [ ] 我知道 Compaction 不等于删除历史。
-- [ ] 我知道“变短”不代表“语义成功”。
-- [ ] 我知道需要验证重要约束、决定、Tool Result 是否仍然存在。
-- [ ] 我知道这一轮还没有重建最终 ModelContext。
-- [ ] 我知道下一步为什么是 Rebuild Compacted Context。
+- [ ] 我知道 Summary + Hot Units 还不是最终 ModelContext。
+- [ ] 我能解释为什么需要 Rebuild。
+- [ ] 我知道 Cold Summary 可以作为内部 Compacted History 重新进入 Context。
+- [ ] 我知道 Hot Tool History 应继续保持原始结构。
+- [ ] 我知道 Rebuild 后需要重新检查 Token Budget。
+- [ ] 我知道“变短”不等于“可继续工作”。
+- [ ] 我能验证 Cold 的旧关键事实和 Hot 的最新结果都还能被模型使用。
+- [ ] 我知道 `04 = Compress`，`05 = Rebuild`。
+- [ ] 我知道下一步为什么要收成 Minimal Compaction Runtime。
 
-做到这些，就进入 **compaction:05 · Rebuild Compacted Context**。
+做到这些，就进入 **compaction:06 · Minimal Compaction Runtime**。
