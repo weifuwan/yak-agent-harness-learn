@@ -1,1 +1,330 @@
-import { DeepSeekProvider } from "../../../../mvp/01-llm/07-unified-llm-interface/deepseek-provider.js"\n\ntype JsonObject = Record<string, unknown>\n\ntype RunObservation = {\n  run: number\n  rawText: string\n  data: JsonObject | null\n  parseError?: string\n  violations: string[]\n  signatures: Record<string, string>\n}\n\nconst apiKey = process.env.MODEL_API_KEY?.trim()\nconst baseUrl = (process.env.MODEL_BASE_URL ?? "https://api.deepseek.com").trim()\nconst model = process.env.MODEL_NAME?.trim() || "deepseek-flash"\nconst runCount = 5\n\nif (!apiKey) {\n  throw new Error("MODEL_API_KEY is required. Fill it in .env first.")\n}\n\nconst scalarFields = [\n  "uiLibrary",\n  "styling",\n  "stateManagement",\n  "router",\n  "font",\n  "primaryColor",\n  "cardRadius",\n  "navigation",\n  "pageLayout",\n] as const\n\nconst listFields = [\n  "pages",\n  "coreComponents",\n  "directoryStructure",\n  "dependencies",\n] as const\n\nconst schemaFields = [\n  "framework",\n  ...scalarFields,\n  ...listFields,\n] as const\n\nconst expectedTopLevelKeys = [...schemaFields]\n\nconst prompt = `帮我做一个“数据同步系统”的前端方案。\n\n你拥有完全决定权：技术栈、样式方案、页面、组件、目录和依赖都由你自己选择。\n\n但是为了做结构稳定性实验，你的输出格式必须严格满足下面的规则：\n\n1. 只返回一个合法 JSON 对象，不要 Markdown，不要解释。\n2. 顶层必须且只能包含下面 14 个字段，不能增加、删除、改名。\n3. framework 必须是对象，并且只能包含 name 和 version，两个值都必须是 string。\n4. uiLibrary、styling、stateManagement、router、font、primaryColor、cardRadius、navigation、pageLayout 必须是 string。\n5. pages、coreComponents、directoryStructure、dependencies 必须是 string[]，数组里的每一项都必须是 string。\n\n严格结构：\n{\n  "framework": { "name": "", "version": "" },\n  "uiLibrary": "",\n  "styling": "",\n  "stateManagement": "",\n  "router": "",\n  "font": "",\n  "primaryColor": "",\n  "cardRadius": "",\n  "navigation": "",\n  "pageLayout": "",\n  "pages": [""],\n  "coreComponents": [""],\n  "directoryStructure": [""],\n  "dependencies": [""]\n}\n\n重要：这里只固定数据结构，不固定任何前端答案。`\n\nfunction extractJsonObject(content: string): JsonObject {\n  const start = content.indexOf("{")\n  const end = content.lastIndexOf("}")\n\n  if (start < 0 || end <= start) {\n    throw new Error("response does not contain a JSON object")\n  }\n\n  const parsed: unknown = JSON.parse(content.slice(start, end + 1))\n  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {\n    throw new Error("top-level JSON value is not an object")\n  }\n\n  return parsed as JsonObject\n}\n\nfunction shapeOf(value: unknown): string {\n  if (value === undefined) return "missing"\n  if (value === null) return "null"\n\n  if (Array.isArray(value)) {\n    if (value.length === 0) return "array<empty>"\n    const itemShapes = [...new Set(value.map((item) => shapeOf(item)))].sort()\n    return `array<${itemShapes.join("|")}>`\n  }\n\n  if (typeof value === "object") {\n    const object = value as JsonObject\n    const entries = Object.keys(object)\n      .sort()\n      .map((key) => `${key}:${shapeOf(object[key])}`)\n    return `object{${entries.join(",")}}`\n  }\n\n  return typeof value\n}\n\nfunction validateSchema(data: JsonObject): string[] {\n  const violations: string[] = []\n  const actualKeys = Object.keys(data)\n\n  for (const key of expectedTopLevelKeys) {\n    if (!(key in data)) {\n      violations.push(`missing top-level field: ${key}`)\n    }\n  }\n\n  for (const key of actualKeys) {\n    if (!expectedTopLevelKeys.includes(key as (typeof schemaFields)[number])) {\n      violations.push(`unexpected top-level field: ${key}`)\n    }\n  }\n\n  const framework = data.framework\n  if (!framework || typeof framework !== "object" || Array.isArray(framework)) {\n    violations.push(`framework expected object{name:string,version:string}, got ${shapeOf(framework)}`)\n  } else {\n    const object = framework as JsonObject\n    const keys = Object.keys(object)\n\n    if (typeof object.name !== "string") {\n      violations.push(`framework.name expected string, got ${shapeOf(object.name)}`)\n    }\n    if (typeof object.version !== "string") {\n      violations.push(`framework.version expected string, got ${shapeOf(object.version)}`)\n    }\n    for (const key of keys) {\n      if (key !== "name" && key !== "version") {\n        violations.push(`framework has unexpected field: ${key}`)\n      }\n    }\n  }\n\n  for (const field of scalarFields) {\n    if (typeof data[field] !== "string") {\n      violations.push(`${field} expected string, got ${shapeOf(data[field])}`)\n    }\n  }\n\n  for (const field of listFields) {\n    const value = data[field]\n    if (!Array.isArray(value)) {\n      violations.push(`${field} expected string[], got ${shapeOf(value)}`)\n      continue\n    }\n\n    if (!value.every((item) => typeof item === "string")) {\n      violations.push(`${field} expected string[], got ${shapeOf(value)}`)\n    }\n  }\n\n  return violations\n}\n\nfunction collectSignatures(data: JsonObject | null): Record<string, string> {\n  return Object.fromEntries(\n    schemaFields.map((field) => [\n      field,\n      data ? shapeOf(data[field]) : "<unparseable>",\n    ]),\n  )\n}\n\nconst provider = new DeepSeekProvider({ apiKey, baseUrl, model })\nconst observations: RunObservation[] = []\n\nconsole.log("========== OpenUI Study 01.04 · Schema Drift ==========")\nconsole.log(`provider : ${provider.name}`)\nconsole.log(`model    : ${provider.model}`)\nconsole.log(`runs     : ${runCount}`)\nconsole.log("same prompt-only schema contract, no runtime schema enforcement\n")\n\nfor (let run = 1; run <= runCount; run += 1) {\n  const response = await provider.chat({\n    messages: [{ role: "user", content: prompt }],\n  })\n\n  let data: JsonObject | null = null\n  let parseError: string | undefined\n  let violations: string[] = []\n\n  try {\n    data = extractJsonObject(response.content)\n    violations = validateSchema(data)\n  } catch (error) {\n    parseError = error instanceof Error ? error.message : String(error)\n    violations = [`unparseable JSON: ${parseError}`]\n  }\n\n  const observation: RunObservation = {\n    run,\n    rawText: response.content,\n    data,\n    parseError,\n    violations,\n    signatures: collectSignatures(data),\n  }\n\n  observations.push(observation)\n\n  console.log(`---------- Run ${run} ----------`)\n  console.log(`parseable  : ${data ? "yes" : "no"}`)\n  console.log(`violations : ${violations.length}`)\n\n  if (violations.length === 0) {\n    console.log("schema     : EXPECTED_MATCH")\n  } else {\n    console.log("schema     : SCHEMA_VIOLATION")\n    for (const item of violations) {\n      console.log(`- ${item}`)\n    }\n  }\n\n  console.log("field shapes:")\n  for (const field of schemaFields) {\n    console.log(`- ${field}: ${observation.signatures[field]}`)\n  }\n  console.log()\n}\n\nconsole.log("========== Per-Run Schema Result ==========")\nconsole.table(\n  observations.map((observation) => ({\n    run: observation.run,\n    parseable: observation.data ? "YES" : "NO",\n    violations: observation.violations.length,\n    result: observation.violations.length === 0 ? "EXPECTED_MATCH" : "SCHEMA_VIOLATION",\n  })),\n)\n\nconsole.log("========== Shape Drift Comparison ==========")\nconst shapeSummary = schemaFields.map((field) => {\n  const shapes = observations.map((observation) => observation.signatures[field] ?? "missing")\n  const uniqueShapes = [...new Set(shapes)]\n  return {\n    field,\n    uniqueShapes: `${uniqueShapes.length}/${observations.length}`,\n    result: uniqueShapes.length === 1 ? "STABLE_SHAPE_THIS_RUN" : "SCHEMA_DRIFT",\n  }\n})\n\nconsole.table(shapeSummary)\n\nconst violatingRuns = observations.filter((observation) => observation.violations.length > 0)\nconst driftFields = shapeSummary.filter((item) => item.result === "SCHEMA_DRIFT")\n\nconsole.log("========== Observation ==========")\nconsole.log(`schema violation runs : ${violatingRuns.length}/${observations.length}`)\nconsole.log(`shape drift fields    : ${driftFields.length}/${shapeSummary.length}`)\nconsole.log()\nconsole.log("Schema Violation = 某一次输出没有匹配期望 Schema。")\nconsole.log("Schema Drift     = 多次 Run 之间，同一个字段的实际 Shape 发生变化。")\nconsole.log("即使 5 次都匹配，也只能说明当前样本遵守了 Prompt；Prompt 本身仍不是 Runtime Schema Enforcement。")\nconsole.log("下一节 05 · No Harness Observation 会把 01～04 的结论收口。")
+import { DeepSeekProvider } from "../../../../mvp/01-llm/07-unified-llm-interface/deepseek-provider.js"
+
+type JsonObject = Record<string, unknown>
+
+type RunObservation = {
+  run: number
+  data: JsonObject | null
+  violations: string[]
+  signatures: Record<string, string>
+}
+
+const apiKey = process.env.MODEL_API_KEY?.trim()
+const baseUrl = (process.env.MODEL_BASE_URL ?? "https://api.deepseek.com").trim()
+const model = process.env.MODEL_NAME?.trim() || "deepseek-flash"
+const runCount = 5
+
+if (!apiKey) {
+  throw new Error("MODEL_API_KEY is required. Fill it in .env first.")
+}
+
+const scalarFields = [
+  "uiLibrary",
+  "styling",
+  "stateManagement",
+  "router",
+  "font",
+  "primaryColor",
+  "cardRadius",
+  "navigation",
+  "pageLayout",
+] as const
+
+const listFields = [
+  "pages",
+  "coreComponents",
+  "directoryStructure",
+  "dependencies",
+] as const
+
+const schemaFields = [
+  "framework",
+  ...scalarFields,
+  ...listFields,
+] as const
+
+const expectedTopLevelKeys = [...schemaFields]
+
+const prompt = `帮我做一个“数据同步系统”的前端方案。
+
+你拥有完全决定权：技术栈、样式方案、页面、组件、目录和依赖都由你自己选择。
+
+但是为了做结构稳定性实验，你的输出格式必须严格满足下面的规则：
+
+1. 只返回一个合法 JSON 对象，不要 Markdown，不要解释。
+2. 顶层必须且只能包含下面 14 个字段，不能增加、删除、改名。
+3. framework 必须是对象，并且只能包含 name 和 version，两个值都必须是 string。
+4. uiLibrary、styling、stateManagement、router、font、primaryColor、cardRadius、navigation、pageLayout 必须是 string。
+5. pages、coreComponents、directoryStructure、dependencies 必须是 string[]，数组里的每一项都必须是 string。
+
+严格结构：
+{
+  "framework": { "name": "", "version": "" },
+  "uiLibrary": "",
+  "styling": "",
+  "stateManagement": "",
+  "router": "",
+  "font": "",
+  "primaryColor": "",
+  "cardRadius": "",
+  "navigation": "",
+  "pageLayout": "",
+  "pages": [""],
+  "coreComponents": [""],
+  "directoryStructure": [""],
+  "dependencies": [""]
+}
+
+重要：这里只固定数据结构，不固定任何前端答案。`
+
+function extractJsonObject(content: string): JsonObject {
+  const start = content.indexOf("{")
+  const end = content.lastIndexOf("}")
+
+  if (start < 0 || end <= start) {
+    throw new Error("response does not contain a JSON object")
+  }
+
+  const parsed: unknown = JSON.parse(content.slice(start, end + 1))
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("top-level JSON value is not an object")
+  }
+
+  return parsed as JsonObject
+}
+
+function shapeOf(value: unknown): string {
+  if (value === undefined) return "missing"
+  if (value === null) return "null"
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "array<empty>"
+
+    const itemShapes = [...new Set(value.map((item) => shapeOf(item)))].sort()
+    return `array<${itemShapes.join("|")}>`
+  }
+
+  if (typeof value === "object") {
+    const object = value as JsonObject
+    const entries = Object.keys(object)
+      .sort()
+      .map((key) => `${key}:${shapeOf(object[key])}`)
+
+    return `object{${entries.join(",")}}`
+  }
+
+  return typeof value
+}
+
+function validateSchema(data: JsonObject): string[] {
+  const violations: string[] = []
+  const actualKeys = Object.keys(data)
+
+  for (const key of expectedTopLevelKeys) {
+    if (!(key in data)) {
+      violations.push(`missing top-level field: ${key}`)
+    }
+  }
+
+  for (const key of actualKeys) {
+    if (!expectedTopLevelKeys.includes(key as (typeof schemaFields)[number])) {
+      violations.push(`unexpected top-level field: ${key}`)
+    }
+  }
+
+  const framework = data.framework
+
+  if (!framework || typeof framework !== "object" || Array.isArray(framework)) {
+    violations.push(
+      `framework expected object{name:string,version:string}, got ${shapeOf(framework)}`,
+    )
+  } else {
+    const object = framework as JsonObject
+
+    if (typeof object.name !== "string") {
+      violations.push(
+        `framework.name expected string, got ${shapeOf(object.name)}`,
+      )
+    }
+
+    if (typeof object.version !== "string") {
+      violations.push(
+        `framework.version expected string, got ${shapeOf(object.version)}`,
+      )
+    }
+
+    for (const key of Object.keys(object)) {
+      if (key !== "name" && key !== "version") {
+        violations.push(`framework has unexpected field: ${key}`)
+      }
+    }
+  }
+
+  for (const field of scalarFields) {
+    if (typeof data[field] !== "string") {
+      violations.push(
+        `${field} expected string, got ${shapeOf(data[field])}`,
+      )
+    }
+  }
+
+  for (const field of listFields) {
+    const value = data[field]
+
+    if (!Array.isArray(value)) {
+      violations.push(
+        `${field} expected string[], got ${shapeOf(value)}`,
+      )
+      continue
+    }
+
+    if (!value.every((item) => typeof item === "string")) {
+      violations.push(
+        `${field} expected string[], got ${shapeOf(value)}`,
+      )
+    }
+  }
+
+  return violations
+}
+
+function collectSignatures(
+  data: JsonObject | null,
+): Record<string, string> {
+  return Object.fromEntries(
+    schemaFields.map((field) => [
+      field,
+      data ? shapeOf(data[field]) : "<unparseable>",
+    ]),
+  )
+}
+
+const provider = new DeepSeekProvider({
+  apiKey,
+  baseUrl,
+  model,
+})
+
+const observations: RunObservation[] = []
+
+console.log("========== OpenUI Study 01.04 · Schema Drift ==========")
+console.log(`provider : ${provider.name}`)
+console.log(`model    : ${provider.model}`)
+console.log(`runs     : ${runCount}`)
+console.log("same prompt-only schema contract, no runtime schema enforcement")
+console.log()
+
+for (let run = 1; run <= runCount; run += 1) {
+  const response = await provider.chat({
+    messages: [
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+  })
+
+  let data: JsonObject | null = null
+  let violations: string[] = []
+
+  try {
+    data = extractJsonObject(response.content)
+    violations = validateSchema(data)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    violations = [`unparseable JSON: ${message}`]
+  }
+
+  const observation: RunObservation = {
+    run,
+    data,
+    violations,
+    signatures: collectSignatures(data),
+  }
+
+  observations.push(observation)
+
+  console.log(`---------- Run ${run} ----------`)
+  console.log(`parseable  : ${data ? "yes" : "no"}`)
+  console.log(`violations : ${violations.length}`)
+
+  if (violations.length === 0) {
+    console.log("schema     : EXPECTED_MATCH")
+  } else {
+    console.log("schema     : SCHEMA_VIOLATION")
+
+    for (const item of violations) {
+      console.log(`- ${item}`)
+    }
+  }
+
+  console.log("field shapes:")
+
+  for (const field of schemaFields) {
+    console.log(`- ${field}: ${observation.signatures[field]}`)
+  }
+
+  console.log()
+}
+
+console.log("========== Per-Run Schema Result ==========")
+
+console.table(
+  observations.map((observation) => ({
+    run: observation.run,
+    parseable: observation.data ? "YES" : "NO",
+    violations: observation.violations.length,
+    result:
+      observation.violations.length === 0
+        ? "EXPECTED_MATCH"
+        : "SCHEMA_VIOLATION",
+  })),
+)
+
+console.log("========== Shape Drift Comparison ==========")
+
+const shapeSummary = schemaFields.map((field) => {
+  const shapes = observations.map(
+    (observation) => observation.signatures[field] ?? "missing",
+  )
+  const uniqueShapes = [...new Set(shapes)]
+
+  return {
+    field,
+    uniqueShapes: `${uniqueShapes.length}/${observations.length}`,
+    result:
+      uniqueShapes.length === 1
+        ? "STABLE_SHAPE_THIS_RUN"
+        : "SCHEMA_DRIFT",
+  }
+})
+
+console.table(shapeSummary)
+
+const violatingRuns = observations.filter(
+  (observation) => observation.violations.length > 0,
+)
+
+const driftFields = shapeSummary.filter(
+  (item) => item.result === "SCHEMA_DRIFT",
+)
+
+console.log("========== Observation ==========")
+console.log(
+  `schema violation runs : ${violatingRuns.length}/${observations.length}`,
+)
+console.log(
+  `shape drift fields    : ${driftFields.length}/${shapeSummary.length}`,
+)
+console.log()
+console.log("Schema Violation = 某一次输出没有匹配期望 Schema。")
+console.log(
+  "Schema Drift     = 多次 Run 之间，同一个字段的实际 Shape 发生变化。",
+)
+console.log(
+  "即使 5 次都匹配，也只能说明当前样本遵守了 Prompt；Prompt 本身仍不是 Runtime Schema Enforcement。",
+)
+console.log(
+  "下一节 05 · No Harness Observation 会把 01～04 的结论收口。",
+)
