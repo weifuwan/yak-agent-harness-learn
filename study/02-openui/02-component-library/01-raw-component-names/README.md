@@ -1,6 +1,6 @@
 # 01 · Raw Component Names
 
-状态：`IMPLEMENTED · WAITING FOR RUN`
+状态：`COMPLETE`
 
 所属章节：`Component Library`
 
@@ -173,11 +173,11 @@ What Can We Validate?
 
 跑完后能回答：
 
-- [ ] Raw Component Names 比 No Harness 多了什么？
-- [ ] 为什么组件白名单已经是一种 System-owned Constraint？
-- [ ] 系统现在能检查什么？
-- [ ] 为什么名字合法不代表组件使用正确？
-- [ ] 为什么下一节需要 Component Metadata？
+- [x] Raw Component Names 比 No Harness 多了什么？
+- [x] 为什么组件白名单已经是一种 System-owned Constraint？
+- [x] 系统现在能检查什么？
+- [x] 为什么名字合法不代表组件使用正确？
+- [x] 为什么下一节需要 Component Metadata？
 
 全部能回答后，本节完成。
 
