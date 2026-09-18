@@ -80,7 +80,8 @@
     "openui:01:02": "node --env-file=.env --import tsx study/02-openui/01-no-ui-harness/02-repeat-same-prompt/index.ts",
     "openui:01:03": "node --env-file=.env --import tsx study/02-openui/01-no-ui-harness/03-decision-drift/index.ts",
     "openui:01:04": "node --env-file=.env --import tsx study/02-openui/01-no-ui-harness/04-schema-drift/index.ts",
-    "openui:01:05": "node --import tsx study/02-openui/01-no-ui-harness/05-no-harness-observation/index.ts"
+    "openui:01:05": "node --import tsx study/02-openui/01-no-ui-harness/05-no-harness-observation/index.ts",
+    "openui:02:01": "node --env-file=.env --import tsx study/02-openui/02-component-library/01-raw-component-names/index.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
