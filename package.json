@@ -75,7 +75,8 @@
     "mvp:compaction": "tsx mvp/06-compaction/src/index.ts",
     "mvp:permission": "tsx mvp/07-permission/src/index.ts",
     "mvp:recovery": "tsx mvp/08-recovery/src/index.ts",
-    "mvp:integration": "tsx integration/src/index.ts"
+    "mvp:integration": "tsx integration/src/index.ts",
+    "openui:01:01": "node --env-file=.env --import tsx study/02-openui/01-no-ui-harness/01-single-generation/index.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
