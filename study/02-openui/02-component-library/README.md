@@ -21,14 +21,14 @@
 
 当前进入下一小节：
 
-> **只有组件名字时，Model 还不知道组件到底是干什么的。**
+> **知道组件是什么意思之后，系统还需要知道它到底允许怎么配置。**
 
 ## 当前进度
 
 ```text
 [x] 01 Raw Component Names
-[>] 02 Component Metadata
-[ ] 03 Props Schema
+[x] 02 Component Metadata
+[>] 03 Props Schema
 [ ] 04 Component Reference
 [ ] 05 Component Groups
 [ ] 06 Minimal Component Library
