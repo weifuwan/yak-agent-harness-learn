@@ -343,6 +343,36 @@ console.log(
   "result           : " + (invalidUsages.length === 0 ? "ACCEPTED" : "REJECTED"),
 )
 
+const localInvalidCase: ComponentUsage = {
+  component: "Button",
+  purpose: "故意构造一个非法 Button，用来验证 Runtime 是否真的会拒绝错误 props。",
+  props: {
+    label: 123,
+    variant: "rainbow",
+    magic: true,
+  },
+}
+
+const localViolations = validateUsage(localInvalidCase)
+
+console.log()
+console.log("========== Local Invalid Case ==========")
+console.log(JSON.stringify(localInvalidCase, null, 2))
+console.log()
+console.log("violations : " + localViolations.length)
+
+for (const violation of localViolations) {
+  console.log("- " + violation)
+}
+
+console.log(
+  "result     : " + (localViolations.length === 0 ? "ACCEPTED" : "REJECTED"),
+)
+
+if (localViolations.length === 0) {
+  throw new Error("local invalid case unexpectedly passed validation")
+}
+
 console.log()
 console.log("========== What Can We Validate? ==========")
 console.table([
