@@ -284,12 +284,12 @@ examples/harnesses/
 
 ```text
 [x] 01 No UI Harness
-[>] 02 Component Library
-[ ] 03 Library → Prompt
+[x] 02 Component Library
+[>] 03 Library → Prompt
 [ ] 04 UI Language / Parser
 [ ] 05 Runtime
 [ ] 06 Renderer / Design System
 [ ] 07 Minimal Frontend Harness
 ```
 
-当前推进 `02-component-library/06-minimal-component-library`。Component Library 收敛完成并实际跑通后，再进入 `03-library-to-prompt`。
+当前推进 `03-library-to-prompt/07-minimal-prompt-generator`。这一章实现完成并实际跑通后，再进入 `04-ui-language-parser`。
