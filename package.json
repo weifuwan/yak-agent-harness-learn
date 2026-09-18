@@ -78,11 +78,12 @@
     "mvp:integration": "tsx integration/src/index.ts",
     "openui:01:01": "node --env-file=.env --import tsx study/02-openui/01-no-ui-harness/01-single-generation/index.ts",
     "openui:01:02": "node --env-file=.env --import tsx study/02-openui/01-no-ui-harness/02-repeat-same-prompt/index.ts",
-    "openui:01:03": "node --env-file=.env --import tsx study/02-openui/01-no-ui-harness/03-decision-drift/index.ts"
+    "openui:01:03": "node --env-file=.env --import tsx study/02-openui/01-no-ui-harness/03-decision-drift/index.ts",
+    "openui:01:04": "node --env-file=.env --import tsx study/02-openui/01-no-ui-harness/04-schema-drift/index.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }
-}
+}\n
