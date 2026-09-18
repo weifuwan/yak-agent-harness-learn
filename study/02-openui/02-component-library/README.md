@@ -19,7 +19,7 @@
 
 当前进入下一小节：
 
-> **知道组件允许怎么配置之后，系统还需要知道它最终对应哪个真实实现。**
+> **组件已经能连接到真实实现以后，组件越来越多时，怎么缩小 Model 每次面对的选择空间？**
 
 ## 当前进度
 
@@ -27,8 +27,8 @@
 [x] 01 Raw Component Names
 [x] 02 Component Metadata
 [x] 03 Props Schema
-[>] 04 Component Reference
-[ ] 05 Component Groups
+[x] 04 Component Reference
+[>] 05 Component Groups
 [ ] 06 Minimal Component Library
 ```
 
