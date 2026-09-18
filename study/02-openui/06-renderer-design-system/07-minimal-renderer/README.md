@@ -1,5 +1,7 @@
 # 07 · Minimal Renderer
 
+> 核心问题：**怎样把 AST、Component Registry 和 Design System 串成一个最小 Renderer？**
+
 状态：`PLANNED`
 
 所属章节：`Renderer / Design System`

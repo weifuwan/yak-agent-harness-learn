@@ -1,5 +1,7 @@
 # 02 · Library + Prompt
 
+> 核心问题：**Harness 怎样自动把 Component Library 变成模型可见的组件约束？**
+
 状态：`PLANNED`
 
 所属章节：`Minimal Frontend Harness`

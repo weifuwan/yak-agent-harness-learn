@@ -1,5 +1,7 @@
 # 03 · LLM → UI Program
 
+> 核心问题：**模型回答怎样被收敛成受控 UI Program，而不是再次退回自由生成前端代码？**
+
 状态：`PLANNED`
 
 所属章节：`Minimal Frontend Harness`

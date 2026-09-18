@@ -1,5 +1,7 @@
 # 04 · Program → Runtime
 
+> 核心问题：**UI Program 已经生成以后，怎样稳定交给 Runtime 计算，而不是让模型继续解释执行？**
+
 状态：`PLANNED`
 
 所属章节：`Minimal Frontend Harness`

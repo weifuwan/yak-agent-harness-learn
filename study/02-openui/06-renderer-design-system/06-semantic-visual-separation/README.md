@@ -1,5 +1,7 @@
 # 06 · Semantic / Visual Separation
 
+> 核心问题：**怎样明确区分模型负责的 UI 语义和系统负责的视觉实现？**
+
 状态：`PLANNED`
 
 所属章节：`Renderer / Design System`

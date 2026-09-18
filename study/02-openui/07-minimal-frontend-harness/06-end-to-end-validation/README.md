@@ -1,5 +1,7 @@
 # 06 · End-to-End Validation
 
+> 核心问题：**整条链已经跑通以后，怎样证明模型没有越过 Harness 设定的边界？**
+
 状态：`PLANNED`
 
 所属章节：`Minimal Frontend Harness`

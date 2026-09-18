@@ -1,5 +1,7 @@
 # 01 · Harness Skeleton
 
+> 核心问题：**把前面的能力集成起来时，一个最小 Frontend Harness 外壳到底应该负责什么？**
+
 状态：`PLANNED`
 
 所属章节：`Minimal Frontend Harness`

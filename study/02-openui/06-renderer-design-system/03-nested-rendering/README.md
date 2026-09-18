@@ -1,5 +1,7 @@
 # 03 · Nested Rendering
 
+> 核心问题：**真实 UI 往往是多层嵌套的，Renderer 怎样递归还原完整组件树？**
+
 状态：`PLANNED`
 
 所属章节：`Renderer / Design System`

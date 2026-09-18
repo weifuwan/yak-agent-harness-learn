@@ -1,5 +1,7 @@
 # 05 · Runtime → Renderer
 
+> 核心问题：**Runtime 得到状态和结构以后，怎样交给 Renderer 变成真实界面？**
+
 状态：`PLANNED`
 
 所属章节：`Minimal Frontend Harness`
