@@ -1,5 +1,7 @@
 # 01 · AST → Component
 
+> 核心问题：**AST 只是结构化数据，怎样把节点稳定映射到真实 UI Component？**
+
 状态：`PLANNED`
 
 所属章节：`Renderer / Design System`

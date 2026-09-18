@@ -1,5 +1,7 @@
 # 06 · Partial / Invalid Output
 
+> 核心问题：**模型输出只有局部错误时，怎样拒绝错误部分，同时保留仍然可用的 UI 结构？**
+
 状态：`PLANNED`
 
 所属章节：`UI Language / Parser`
