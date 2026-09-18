@@ -290,6 +290,11 @@ function validateUsage(usage: ComponentUsage): string[] {
 const provider = new DeepSeekProvider({ apiKey, baseUrl, model })
 
 console.log("========== OpenUI Study 02.03 · Props Schema ==========")
+console.log("========== Cumulative Capability ==========")
+console.log("01 names       : YES")
+console.log("02 metadata    : YES")
+console.log("03 props       : NEW")
+console.log()
 console.log("provider : " + provider.name)
 console.log("model    : " + provider.model)
 console.log()
