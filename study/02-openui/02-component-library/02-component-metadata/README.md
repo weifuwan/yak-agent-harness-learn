@@ -1,6 +1,6 @@
 # 02 · Component Metadata
 
-状态：`IMPLEMENTED · WAITING FOR RUN`
+状态：`COMPLETE`
 
 所属章节：`Component Library`
 
@@ -226,11 +226,11 @@ What Can We Validate?
 
 跑完后能回答：
 
-- [ ] Component Metadata 比 Raw Names 多了什么？
-- [ ] 为什么 description 属于 System-owned knowledge？
-- [ ] Model 为什么不再只能靠组件名猜语义？
-- [ ] 为什么 description 还不是 Runtime Enforcement？
-- [ ] 为什么下一节需要 Props Schema？
+- [x] Component Metadata 比 Raw Names 多了什么？
+- [x] 为什么 description 属于 System-owned knowledge？
+- [x] Model 为什么不再只能靠组件名猜语义？
+- [x] 为什么 description 还不是 Runtime Enforcement？
+- [x] 为什么下一节需要 Props Schema？
 
 全部能回答后，本节完成。
 
