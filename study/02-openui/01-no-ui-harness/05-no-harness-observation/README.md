@@ -1,10 +1,10 @@
 # 05 · No Harness Observation
 
+> 核心问题：**前面的漂移现象说明，哪些决定不应该继续交给模型自由生成？**
+
 状态：`IMPLEMENTED · WAITING FOR RUN`
 
 所属章节：`No UI Harness`
-
-## 核心问题
 
 这一节不再做新的 LLM 实验。
 

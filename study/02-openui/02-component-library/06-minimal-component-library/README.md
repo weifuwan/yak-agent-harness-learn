@@ -1,5 +1,7 @@
 # 06 · Minimal Component Library
 
+> 核心问题：**怎么把组件名、语义、Props、Reference 和分组收敛成一个最小可用 Component Library？**
+
 状态：`PLANNED`
 
 所属章节：`Component Library`
