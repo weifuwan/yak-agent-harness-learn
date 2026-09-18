@@ -1,5 +1,7 @@
 # 05 · Examples
 
+> 核心问题：**规则写清楚以后模型仍会误用时，怎样用少量 Examples 帮它学会正确组合？**
+
 状态：`PLANNED`
 
 所属章节：`Library → Prompt`

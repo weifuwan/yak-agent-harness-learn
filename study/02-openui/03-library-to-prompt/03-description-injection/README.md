@@ -1,5 +1,7 @@
 # 03 · Description Injection
 
+> 核心问题：**只有组件签名还不够时，模型怎么理解组件的语义和使用场景？**
+
 状态：`PLANNED`
 
 所属章节：`Library → Prompt`

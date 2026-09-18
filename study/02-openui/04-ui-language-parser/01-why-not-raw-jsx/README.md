@@ -1,5 +1,7 @@
 # 01 · Why Not Raw JSX
 
+> 核心问题：**为什么直接让模型生成 JSX，仍然会把太多结构和实现决定交给模型？**
+
 状态：`PLANNED`
 
 所属章节：`UI Language / Parser`

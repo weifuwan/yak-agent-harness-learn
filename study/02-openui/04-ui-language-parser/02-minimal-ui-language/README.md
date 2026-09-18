@@ -1,5 +1,7 @@
 # 02 · Minimal UI Language
 
+> 核心问题：**如果不让模型自由生成 JSX，一门最小 UI Language 至少需要表达什么？**
+
 状态：`PLANNED`
 
 所属章节：`UI Language / Parser`

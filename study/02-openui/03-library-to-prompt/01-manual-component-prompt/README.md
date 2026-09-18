@@ -1,5 +1,7 @@
 # 01 · Manual Component Prompt
 
+> 核心问题：**Component Library 已经有了，怎么先把这些组件能力告诉模型？**
+
 状态：`PLANNED`
 
 所属章节：`Library → Prompt`

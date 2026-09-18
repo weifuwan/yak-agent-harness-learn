@@ -1,5 +1,7 @@
 # 06 · Prompt Spec
 
+> 核心问题：**组件 Prompt 越来越复杂以后，怎样把 Prompt 本身变成稳定、可维护的规范？**
+
 状态：`PLANNED`
 
 所属章节：`Library → Prompt`
