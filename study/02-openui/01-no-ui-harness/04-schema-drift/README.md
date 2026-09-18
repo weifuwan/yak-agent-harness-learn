@@ -1,6 +1,6 @@
 # 04 · Schema Drift
 
-状态：`IMPLEMENTED · WAITING FOR RUN`
+状态：`COMPLETE`
 
 所属章节：`No UI Harness`
 
@@ -108,11 +108,11 @@ shape drift fields    : Y / 14
 
 跑完后能回答：
 
-- [ ] Schema Violation 和 Schema Drift 有什么区别？
-- [ ] 为什么这次 Prompt 必须写得很明确？
-- [ ] 哪些字段发生了类型或 Shape 变化？
-- [ ] 为什么 Prompt Constraint 不等于 Runtime Constraint？
-- [ ] 即使 5 次都匹配，为什么仍不能说 Schema 已被系统保证？
+- [x] Schema Violation 和 Schema Drift 有什么区别？
+- [x] 为什么这次 Prompt 必须写得很明确？
+- [x] 哪些字段发生了类型或 Shape 变化？
+- [x] 为什么 Prompt Constraint 不等于 Runtime Constraint？
+- [x] 即使 5 次都匹配，为什么仍不能说 Schema 已被系统保证？
 
 下一节：
 
