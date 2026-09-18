@@ -1,1 +1,206 @@
-import { DeepSeekProvider } from "../../../../mvp/01-llm/07-unified-llm-interface/deepseek-provider.js"\n\ntype JsonObject = Record<string, unknown>\ntype PropType = "string" | "boolean" | "string[]"\n\ntype PropRule = {\n  type: PropType\n  required?: boolean\n  enum?: string[]\n}\n\ntype ComponentDefinition = {\n  name: string\n  description: string\n  props: Record<string, PropRule>\n  reference: string\n}\n\ntype ComponentImplementation = {\n  id: string\n  source: string\n  exportName: string\n}\n\ntype ComponentUsage = {\n  component: string\n  purpose: string\n  props: JsonObject\n}\n\ntype UiPlan = {\n  page: string\n  components: ComponentUsage[]\n}\n\nconst apiKey = process.env.MODEL_API_KEY?.trim()\nconst baseUrl = (process.env.MODEL_BASE_URL ?? "https://api.deepseek.com").trim()\nconst model = process.env.MODEL_NAME?.trim() || "deepseek-flash"\n\nif (!apiKey) {\n  throw new Error("MODEL_API_KEY is required. Fill it in .env first.")\n}\n\nconst implementations: ComponentImplementation[] = [\n  { id: "ui.page", source: "src/components/Page.tsx", exportName: "Page" },\n  { id: "ui.card", source: "src/components/Card.tsx", exportName: "Card" },\n  { id: "ui.stat-card", source: "src/components/StatCard.tsx", exportName: "StatCard" },\n  { id: "ui.data-table", source: "src/components/DataTable.tsx", exportName: "DataTable" },\n  { id: "ui.status-badge", source: "src/components/StatusBadge.tsx", exportName: "StatusBadge" },\n  { id: "ui.button", source: "src/components/Button.tsx", exportName: "Button" },\n  { id: "ui.input", source: "src/components/Input.tsx", exportName: "Input" },\n  { id: "ui.select", source: "src/components/Select.tsx", exportName: "Select" },\n  { id: "ui.dialog", source: "src/components/Dialog.tsx", exportName: "Dialog" },\n  { id: "ui.tabs", source: "src/components/Tabs.tsx", exportName: "Tabs" },\n]\n\nconst implementationById = new Map(\n  implementations.map((implementation) => [implementation.id, implementation]),\n)\n\nconst library: ComponentDefinition[] = [\n  {\n    name: "Page",\n    description: "页面根容器，用于承载一个完整页面的主要内容。",\n    props: {\n      title: { type: "string", required: true },\n      subtitle: { type: "string" },\n    },\n    reference: "ui.page",\n  },\n  {\n    name: "Card",\n    description: "内容分组容器，用于把相关信息组织成独立区域。",\n    props: { title: { type: "string" } },\n    reference: "ui.card",\n  },\n  {\n    name: "StatCard",\n    description: "用于展示单个关键统计指标及其简短状态信息。",\n    props: {\n      label: { type: "string", required: true },\n      value: { type: "string", required: true },\n      tone: { type: "string", enum: ["default", "success", "warning", "danger"] },\n    },\n    reference: "ui.stat-card",\n  },\n  {\n    name: "DataTable",\n    description: "用于展示结构化、多行、多列的数据集合。",\n    props: {\n      columns: { type: "string[]", required: true },\n      striped: { type: "boolean" },\n    },\n    reference: "ui.data-table",\n  },\n  {\n    name: "StatusBadge",\n    description: "用于展示简短状态，例如运行中、成功、失败。",\n    props: {\n      status: { type: "string", required: true, enum: ["running", "success", "failed", "paused"] },\n      text: { type: "string" },\n    },\n    reference: "ui.status-badge",\n  },\n  {\n    name: "Button",\n    description: "用于触发明确的用户操作。",\n    props: {\n      label: { type: "string", required: true },\n      action: { type: "string", required: true },\n      variant: { type: "string", enum: ["primary", "secondary", "danger"] },\n    },\n    reference: "ui.button",\n  },\n  {\n    name: "Input",\n    description: "用于输入自由文本，例如名称或搜索关键字。",\n    props: {\n      name: { type: "string", required: true },\n      placeholder: { type: "string" },\n    },\n    reference: "ui.input",\n  },\n  {\n    name: "Select",\n    description: "用于从有限的预定义选项中选择一个值。",\n    props: {\n      name: { type: "string", required: true },\n      options: { type: "string[]", required: true },\n    },\n    reference: "ui.select",\n  },\n  {\n    name: "Dialog",\n    description: "用于需要用户集中处理或确认的模态交互。",\n    props: {\n      title: { type: "string", required: true },\n      open: { type: "boolean", required: true },\n    },\n    reference: "ui.dialog",\n  },\n  {\n    name: "Tabs",\n    description: "用于在同一区域的多个并列视图之间切换。",\n    props: {\n      items: { type: "string[]", required: true },\n      activeKey: { type: "string" },\n    },\n    reference: "ui.tabs",\n  },\n]\n\nconst definitionByName = new Map(\n  library.map((component) => [component.name, component]),\n)\n\nconst userRequest = "帮我做一个数据同步任务列表页面"\n\nfunction propRuleToText(name: string, rule: PropRule): string {\n  const parts = [name + ": " + rule.type]\n  if (rule.required) parts.push("required")\n  if (rule.enum) parts.push("enum=" + rule.enum.join("|"))\n  return parts.join(", ")\n}\n\nconst libraryPrompt = library\n  .map((component) => {\n    const props = Object.entries(component.props)\n      .map(([name, rule]) => "    - " + propRuleToText(name, rule))\n      .join("\n")\n\n    return [\n      "- " + component.name + ": " + component.description,\n      "  props:",\n      props || "    - none",\n    ].join("\n")\n  })\n  .join("\n")\n\nconst prompt = [\n  userRequest,\n  "",\n  "你只能使用下面 Component Library 中声明的 UI 组件和 props。",\n  "不要关心组件的 reference，它是 Runtime 内部信息，不需要由 Model 输出。",\n  "",\n  libraryPrompt,\n  "",\n  "请只返回合法 JSON，不要 Markdown，不要解释：",\n  "",\n  "{",\n  '  "page": "",',\n  '  "components": [',\n  "    {",\n  '      "component": "",',\n  '      "purpose": "",',\n  '      "props": {}',\n  "    }",\n  "  ]",\n  "}",\n  "",\n  "- component 必须来自 Library",\n  "- props 只能使用 schema 中声明的字段",\n  "- 不需要输出 reference",\n  "- 不需要生成代码",\n].join("\n")\n\nfunction extractJsonObject(content: string): JsonObject {\n  const start = content.indexOf("{")\n  const end = content.lastIndexOf("}")\n  if (start < 0 || end <= start) throw new Error("response does not contain a JSON object")\n\n  const parsed: unknown = JSON.parse(content.slice(start, end + 1))\n  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {\n    throw new Error("top-level JSON value is not an object")\n  }\n  return parsed as JsonObject\n}\n\nfunction parsePlan(content: string): UiPlan {\n  const data = extractJsonObject(content)\n  if (typeof data.page !== "string") throw new Error("page must be string")\n  if (!Array.isArray(data.components)) throw new Error("components must be array")\n\n  const components = data.components.map((item, index) => {\n    if (!item || typeof item !== "object" || Array.isArray(item)) {\n      throw new Error("components[" + index + "] must be object")\n    }\n\n    const object = item as JsonObject\n    if (typeof object.component !== "string") {\n      throw new Error("components[" + index + "].component must be string")\n    }\n    if (typeof object.purpose !== "string") {\n      throw new Error("components[" + index + "].purpose must be string")\n    }\n    if (!object.props || typeof object.props !== "object" || Array.isArray(object.props)) {\n      throw new Error("components[" + index + "].props must be object")\n    }\n\n    return {\n      component: object.component,\n      purpose: object.purpose,\n      props: object.props as JsonObject,\n    }\n  })\n\n  return { page: data.page, components }\n}\n\nfunction resolveReference(componentName: string): {\n  reference: string\n  implementation: ComponentImplementation\n} {\n  const definition = definitionByName.get(componentName)\n  if (!definition) throw new Error("unknown component: " + componentName)\n\n  const implementation = implementationById.get(definition.reference)\n  if (!implementation) {\n    throw new Error(\n      "unresolved component reference: " + componentName + " -> " + definition.reference,\n    )\n  }\n\n  return {\n    reference: definition.reference,\n    implementation,\n  }\n}\n\nconst provider = new DeepSeekProvider({ apiKey, baseUrl, model })\n\nconsole.log("========== OpenUI Study 02.04 · Component Reference ==========")\nconsole.log("provider : " + provider.name)\nconsole.log("model    : " + provider.model)\nconsole.log()\n\nconsole.log("========== Implementation Registry ==========")\nconsole.table(implementations)\n\nconsole.log("========== Library References ==========")\nconsole.table(\n  library.map((component) => ({\n    component: component.name,\n    reference: component.reference,\n  })),\n)\n\nconsole.log("========== User Request ==========")\nconsole.log(userRequest)\nconsole.log()\n\nconst response = await provider.chat({\n  messages: [{ role: "user", content: prompt }],\n})\n\nconsole.log("========== Model Output ==========")\nconsole.log(response.content)\nconsole.log()\n\nconst plan = parsePlan(response.content)\nconst resolved = plan.components.map((usage) => {\n  const result = resolveReference(usage.component)\n  return {\n    component: usage.component,\n    reference: result.reference,\n    source: result.implementation.source,\n    exportName: result.implementation.exportName,\n  }\n})\n\nconsole.log("========== Reference Resolution ==========")\nconsole.table(resolved)\n\nconst uniqueComponents = [...new Set(plan.components.map((usage) => usage.component))]\nconst unresolved = uniqueComponents.filter((name) => {\n  const definition = definitionByName.get(name)\n  return !definition || !implementationById.has(definition.reference)\n})\n\nconsole.log("========== Runtime Decision ==========")\nconsole.log("used component types : " + uniqueComponents.length)\nconsole.log("resolved references  : " + (uniqueComponents.length - unresolved.length))\nconsole.log("unresolved references: " + unresolved.length)\nconsole.log("result               : " + (unresolved.length === 0 ? "RESOLVED" : "UNRESOLVED"))\n\nconst brokenDefinition: ComponentDefinition = {\n  name: "BrokenButton",\n  description: "故意构造的错误组件定义。",\n  props: {},\n  reference: "ui.missing-button",\n}\n\nconst brokenImplementation = implementationById.get(brokenDefinition.reference)\n\nconsole.log()\nconsole.log("========== Local Broken Reference Case ==========")\nconsole.log("component  : " + brokenDefinition.name)\nconsole.log("reference  : " + brokenDefinition.reference)\nconsole.log("resolved   : " + (brokenImplementation ? "YES" : "NO"))\nconsole.log("result     : " + (brokenImplementation ? "RESOLVED" : "UNRESOLVED"))\n\nif (brokenImplementation) {\n  throw new Error("broken reference case unexpectedly resolved")\n}\n\nconsole.log()\nconsole.log("========== What Can We Validate? ==========")\nconsole.table([\n  { question: "组件名是否允许？", result: "YES" },\n  { question: "Props 是否符合 Schema？", result: "PREVIOUS_STEP" },\n  { question: "Definition 是否有 reference？", result: "YES" },\n  { question: "reference 是否能解析？", result: "YES" },\n  { question: "真实实现的 source/exportName 是什么？", result: "YES" },\n  { question: "现在是否真正 Render React？", result: "NO" },\n])\n\nconsole.log("========== Observation ==========")\nconsole.log(\n  "Component Reference 把抽象 Library Definition 与真实组件实现建立了稳定连接。",\n)\nconsole.log(\n  "Model 只需要选择 Button；Runtime 负责把 Button -> ui.button -> src/components/Button.tsx。",\n)\nconsole.log(\n  "reference 是 Runtime 内部确定性，不应该让 Model 每次重新猜源码路径。",\n)\nconsole.log(\n  "下一节 05 · Component Groups 要解决：组件越来越多以后，如何组织和缩小模型的选择空间。",\n)
+import { DeepSeekProvider } from "../../../../mvp/01-llm/07-unified-llm-interface/deepseek-provider.js"
+
+type JsonObject = Record<string, unknown>
+
+type ComponentDefinition = {
+  name: string
+  description: string
+  props: Record<string, string>
+  reference: string
+}
+
+type ComponentImplementation = {
+  id: string
+  source: string
+  exportName: string
+}
+
+type ComponentUsage = {
+  component: string
+  purpose: string
+  props: JsonObject
+}
+
+type UiPlan = {
+  page: string
+  components: ComponentUsage[]
+}
+
+const apiKey = process.env.MODEL_API_KEY?.trim()
+const baseUrl = (process.env.MODEL_BASE_URL ?? "https://api.deepseek.com").trim()
+const model = process.env.MODEL_NAME?.trim() || "deepseek-flash"
+
+if (!apiKey) {
+  throw new Error("MODEL_API_KEY is required. Fill it in .env first.")
+}
+
+const implementations: ComponentImplementation[] = [
+  { id: "ui.page", source: "src/components/Page.tsx", exportName: "Page" },
+  { id: "ui.card", source: "src/components/Card.tsx", exportName: "Card" },
+  { id: "ui.stat-card", source: "src/components/StatCard.tsx", exportName: "StatCard" },
+  { id: "ui.data-table", source: "src/components/DataTable.tsx", exportName: "DataTable" },
+  { id: "ui.status-badge", source: "src/components/StatusBadge.tsx", exportName: "StatusBadge" },
+  { id: "ui.button", source: "src/components/Button.tsx", exportName: "Button" },
+  { id: "ui.input", source: "src/components/Input.tsx", exportName: "Input" },
+  { id: "ui.select", source: "src/components/Select.tsx", exportName: "Select" },
+  { id: "ui.dialog", source: "src/components/Dialog.tsx", exportName: "Dialog" },
+  { id: "ui.tabs", source: "src/components/Tabs.tsx", exportName: "Tabs" },
+]
+
+const implementationById = new Map(
+  implementations.map((item) => [item.id, item]),
+)
+
+const library: ComponentDefinition[] = [
+  { name: "Page", description: "页面根容器。", props: { title: "string required", subtitle: "string" }, reference: "ui.page" },
+  { name: "Card", description: "内容分组容器。", props: { title: "string" }, reference: "ui.card" },
+  { name: "StatCard", description: "展示单个统计指标。", props: { label: "string required", value: "string required", tone: "default|success|warning|danger" }, reference: "ui.stat-card" },
+  { name: "DataTable", description: "展示多行多列数据。", props: { columns: "string[] required", striped: "boolean" }, reference: "ui.data-table" },
+  { name: "StatusBadge", description: "展示简短状态。", props: { status: "running|success|failed|paused", text: "string" }, reference: "ui.status-badge" },
+  { name: "Button", description: "触发用户操作。", props: { label: "string required", action: "string required", variant: "primary|secondary|danger" }, reference: "ui.button" },
+  { name: "Input", description: "输入自由文本。", props: { name: "string required", placeholder: "string" }, reference: "ui.input" },
+  { name: "Select", description: "从有限选项中选择。", props: { name: "string required", options: "string[] required" }, reference: "ui.select" },
+  { name: "Dialog", description: "承载模态交互。", props: { title: "string required", open: "boolean required" }, reference: "ui.dialog" },
+  { name: "Tabs", description: "切换多个并列视图。", props: { items: "string[] required", activeKey: "string" }, reference: "ui.tabs" },
+]
+
+const definitionByName = new Map(library.map((item) => [item.name, item]))
+const userRequest = "帮我做一个数据同步任务列表页面"
+
+const modelLibrary = library.map(({ reference: _reference, ...visible }) => visible)
+
+const prompt = [
+  userRequest,
+  "你只能使用下面的 Component Library。reference 是 Runtime 内部信息，所以没有暴露给你。",
+  JSON.stringify(modelLibrary, null, 2),
+  '只返回合法 JSON：{"page":"","components":[{"component":"","purpose":"","props":{}}]}',
+  "component 必须来自 Library；props 只使用已声明字段；不要生成 reference；不要生成代码。",
+].join("\n\n")
+
+function extractJsonObject(content: string): JsonObject {
+  const start = content.indexOf("{")
+  const end = content.lastIndexOf("}")
+  if (start < 0 || end <= start) throw new Error("response does not contain JSON")
+
+  const value: unknown = JSON.parse(content.slice(start, end + 1))
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("top-level JSON must be object")
+  }
+  return value as JsonObject
+}
+
+function parsePlan(content: string): UiPlan {
+  const data = extractJsonObject(content)
+  if (typeof data.page !== "string") throw new Error("page must be string")
+  if (!Array.isArray(data.components)) throw new Error("components must be array")
+
+  const components = data.components.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error("components[" + index + "] must be object")
+    }
+    const object = item as JsonObject
+    if (typeof object.component !== "string") throw new Error("component must be string")
+    if (typeof object.purpose !== "string") throw new Error("purpose must be string")
+    if (!object.props || typeof object.props !== "object" || Array.isArray(object.props)) {
+      throw new Error("props must be object")
+    }
+    return {
+      component: object.component,
+      purpose: object.purpose,
+      props: object.props as JsonObject,
+    }
+  })
+
+  return { page: data.page, components }
+}
+
+function resolveReference(componentName: string) {
+  const definition = definitionByName.get(componentName)
+  if (!definition) throw new Error("unknown component: " + componentName)
+
+  const implementation = implementationById.get(definition.reference)
+  if (!implementation) {
+    throw new Error("unresolved reference: " + definition.reference)
+  }
+
+  return { definition, implementation }
+}
+
+const provider = new DeepSeekProvider({ apiKey, baseUrl, model })
+
+console.log("========== OpenUI Study 02.04 · Component Reference ==========")
+console.log("provider : " + provider.name)
+console.log("model    : " + provider.model)
+console.log()
+
+console.log("========== Implementation Registry ==========")
+console.table(implementations)
+
+console.log("========== Library References ==========")
+console.table(library.map((item) => ({ component: item.name, reference: item.reference })))
+
+const response = await provider.chat({
+  messages: [{ role: "user", content: prompt }],
+})
+
+console.log("========== Model Output ==========")
+console.log(response.content)
+console.log()
+
+const plan = parsePlan(response.content)
+const uniqueComponents = [...new Set(plan.components.map((item) => item.component))]
+
+const resolved = uniqueComponents.map((component) => {
+  const { definition, implementation } = resolveReference(component)
+  return {
+    component,
+    reference: definition.reference,
+    source: implementation.source,
+    exportName: implementation.exportName,
+  }
+})
+
+console.log("========== Reference Resolution ==========")
+console.table(resolved)
+
+console.log("========== Runtime Decision ==========")
+console.log("used component types : " + uniqueComponents.length)
+console.log("resolved references  : " + resolved.length)
+console.log("unresolved references: 0")
+console.log("result               : RESOLVED")
+
+const brokenDefinition: ComponentDefinition = {
+  name: "BrokenButton",
+  description: "故意构造的错误组件定义。",
+  props: {},
+  reference: "ui.missing-button",
+}
+const brokenImplementation = implementationById.get(brokenDefinition.reference)
+
+console.log()
+console.log("========== Local Broken Reference Case ==========")
+console.log("component : " + brokenDefinition.name)
+console.log("reference : " + brokenDefinition.reference)
+console.log("resolved  : " + (brokenImplementation ? "YES" : "NO"))
+console.log("result    : " + (brokenImplementation ? "RESOLVED" : "UNRESOLVED"))
+
+if (brokenImplementation) {
+  throw new Error("broken reference case unexpectedly resolved")
+}
+
+console.log()
+console.log("========== What Can We Validate? ==========")
+console.table([
+  { question: "组件名是否允许？", result: "YES" },
+  { question: "Props 是否符合 Schema？", result: "PREVIOUS_STEP" },
+  { question: "Definition 是否有 reference？", result: "YES" },
+  { question: "reference 是否能解析？", result: "YES" },
+  { question: "真实实现身份是否确定？", result: "YES" },
+  { question: "现在是否真正 Render React？", result: "NO" },
+])
+
+console.log("========== Observation ==========")
+console.log("Component Reference 把抽象 Definition 与真实实现身份连接起来。")
+console.log("Model 只选 Button；Runtime 决定 Button -> ui.button -> src/components/Button.tsx。")
+console.log("reference 属于 System-owned Runtime Knowledge，不应该由 Model 每次猜。")
+console.log("下一节 05 · Component Groups 研究组件多起来以后如何组织选择空间。")
