@@ -174,6 +174,8 @@ result   = UNRESOLVED
 
 > reference 不只是说明文字，而是 Runtime 真正可以检查的连接。
 
+同一套检查也会在调用 Model 之前扫描整个 Component Library。这样即使某个坏 reference 这次没有被 Model 选中，也不会悄悄留在 Library 里。
+
 ---
 
 ## ⑥ 运行
@@ -187,6 +189,7 @@ npm run openui:02:04
 ```text
 Implementation Registry
 Library References
+Library Reference Validation
 Model Output
 Reference Resolution
 Runtime Decision
