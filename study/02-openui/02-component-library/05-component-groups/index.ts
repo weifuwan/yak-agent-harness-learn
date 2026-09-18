@@ -1,6 +1,13 @@
 import { DeepSeekProvider } from "../../../../mvp/01-llm/07-unified-llm-interface/deepseek-provider.js"
 
 type JsonObject = Record<string, unknown>
+type PropType = "string" | "number" | "boolean" | "string[]"
+
+type PropRule = {
+  type: PropType
+  required?: boolean
+  enum?: string[]
+}
 
 type ComponentGroupId =
   | "layout"
@@ -18,9 +25,15 @@ type ComponentGroup = {
 type ComponentDefinition = {
   name: string
   description: string
-  props: Record<string, string>
+  props: Record<string, PropRule>
   reference: string
   group: ComponentGroupId
+}
+
+type ComponentImplementation = {
+  id: string
+  source: string
+  exportName: string
 }
 
 type ComponentUsage = {
@@ -51,132 +64,387 @@ const groups: ComponentGroup[] = [
   { id: "overlay", description: "模态层、浮层等临时交互容器。" },
 ]
 
+const implementations: ComponentImplementation[] = [
+  { id: "ui.page", source: "src/components/Page.tsx", exportName: "Page" },
+  { id: "ui.card", source: "src/components/Card.tsx", exportName: "Card" },
+  { id: "ui.stat-card", source: "src/components/StatCard.tsx", exportName: "StatCard" },
+  { id: "ui.data-table", source: "src/components/DataTable.tsx", exportName: "DataTable" },
+  { id: "ui.status-badge", source: "src/components/StatusBadge.tsx", exportName: "StatusBadge" },
+  { id: "ui.button", source: "src/components/Button.tsx", exportName: "Button" },
+  { id: "ui.input", source: "src/components/Input.tsx", exportName: "Input" },
+  { id: "ui.select", source: "src/components/Select.tsx", exportName: "Select" },
+  { id: "ui.dialog", source: "src/components/Dialog.tsx", exportName: "Dialog" },
+  { id: "ui.tabs", source: "src/components/Tabs.tsx", exportName: "Tabs" },
+]
+
+const implementationById = new Map(
+  implementations.map((implementation) => [implementation.id, implementation]),
+)
+
 const library: ComponentDefinition[] = [
   {
     name: "Page",
-    description: "页面根容器。",
-    props: { title: "string required", subtitle: "string" },
+    description: "页面根容器，用于承载一个完整页面的主要内容。",
+    props: {
+      title: { type: "string", required: true },
+      subtitle: { type: "string" },
+    },
     reference: "ui.page",
     group: "layout",
   },
   {
     name: "Card",
-    description: "内容分组容器。",
-    props: { title: "string" },
+    description: "内容分组容器，用于把相关信息组织成独立区域。",
+    props: {
+      title: { type: "string" },
+    },
     reference: "ui.card",
     group: "layout",
   },
   {
     name: "StatCard",
-    description: "展示单个统计指标。",
+    description: "用于展示单个关键统计指标及其简短状态信息。",
     props: {
-      label: "string required",
-      value: "string required",
-      tone: "default|success|warning|danger",
+      label: { type: "string", required: true },
+      value: { type: "string", required: true },
+      tone: {
+        type: "string",
+        enum: ["default", "success", "warning", "danger"],
+      },
     },
     reference: "ui.stat-card",
     group: "data-display",
   },
   {
     name: "DataTable",
-    description: "展示多行多列数据。",
-    props: { columns: "string[] required", striped: "boolean" },
+    description: "用于展示结构化、多行、多列的数据集合。",
+    props: {
+      columns: { type: "string[]", required: true },
+      striped: { type: "boolean" },
+    },
     reference: "ui.data-table",
     group: "data-display",
   },
   {
     name: "StatusBadge",
-    description: "展示简短状态。",
-    props: { status: "running|success|failed|paused", text: "string" },
+    description: "用于展示简短状态，例如运行中、成功、失败。",
+    props: {
+      status: {
+        type: "string",
+        required: true,
+        enum: ["running", "success", "failed", "paused"],
+      },
+      text: { type: "string" },
+    },
     reference: "ui.status-badge",
     group: "data-display",
   },
   {
     name: "Button",
-    description: "触发用户操作。",
+    description: "用于触发明确的用户操作。",
     props: {
-      label: "string required",
-      action: "string required",
-      variant: "primary|secondary|danger",
+      label: { type: "string", required: true },
+      action: { type: "string", required: true },
+      variant: {
+        type: "string",
+        enum: ["primary", "secondary", "danger"],
+      },
     },
     reference: "ui.button",
     group: "action",
   },
   {
     name: "Input",
-    description: "输入自由文本。",
-    props: { name: "string required", placeholder: "string" },
+    description: "用于输入自由文本，例如名称或搜索关键字。",
+    props: {
+      name: { type: "string", required: true },
+      placeholder: { type: "string" },
+    },
     reference: "ui.input",
     group: "form",
   },
   {
     name: "Select",
-    description: "从有限选项中选择。",
-    props: { name: "string required", options: "string[] required" },
+    description: "用于从有限的预定义选项中选择一个值。",
+    props: {
+      name: { type: "string", required: true },
+      options: { type: "string[]", required: true },
+    },
     reference: "ui.select",
     group: "form",
   },
   {
     name: "Dialog",
-    description: "承载模态交互。",
-    props: { title: "string required", open: "boolean required" },
+    description: "用于需要用户集中处理或确认的模态交互。",
+    props: {
+      title: { type: "string", required: true },
+      open: { type: "boolean", required: true },
+    },
     reference: "ui.dialog",
     group: "overlay",
   },
   {
     name: "Tabs",
-    description: "切换多个并列视图。",
-    props: { items: "string[] required", activeKey: "string" },
+    description: "用于在同一区域的多个并列视图之间切换。",
+    props: {
+      items: { type: "string[]", required: true },
+      activeKey: { type: "string" },
+    },
     reference: "ui.tabs",
     group: "navigation",
   },
 ]
 
-const definitionByName = new Map(library.map((item) => [item.name, item]))
+const definitionByName = new Map(
+  library.map((component) => [component.name, component]),
+)
 const groupById = new Map(groups.map((group) => [group.id, group]))
 
 const userRequest = "帮我做一个数据同步任务列表页面"
 
-// 这一节先不研究“自动选择 Group”。
-// 当前场景由 System 明确决定只开放这些能力。
+// 这一节只研究“如何缩小能力集合”，暂时不研究自动 Group Routing。
 const activeGroups: ComponentGroupId[] = ["layout", "data-display", "action"]
 const activeGroupSet = new Set<ComponentGroupId>(activeGroups)
 
-function selectLibraryByGroups(
-  definitions: ComponentDefinition[],
-  selectedGroups: ComponentGroupId[],
-) {
-  const selected = new Set<ComponentGroupId>(selectedGroups)
-  return definitions.filter((definition) => selected.has(definition.group))
+function matchesType(value: unknown, type: PropType): boolean {
+  if (type === "string") return typeof value === "string"
+  if (type === "number") return typeof value === "number"
+  if (type === "boolean") return typeof value === "boolean"
+
+  if (type === "string[]") {
+    return Array.isArray(value) && value.every((item) => typeof item === "string")
+  }
+
+  return false
 }
 
-function validateGroupDefinitions(definitions: ComponentDefinition[]) {
-  return definitions
-    .filter((definition) => !groupById.has(definition.group))
-    .map((definition) => ({
-      component: definition.name,
-      group: definition.group,
-    }))
+function valueType(value: unknown): string {
+  if (Array.isArray(value)) {
+    const itemTypes = [...new Set(value.map((item) => typeof item))]
+    return "array<" + itemTypes.join("|") + ">"
+  }
+
+  if (value === null) return "null"
+  return typeof value
 }
 
-function validateUsageScope(usage: ComponentUsage): string[] {
+function validateLibrary() {
+  const violations: string[] = []
+
+  for (const definition of library) {
+    if (!groupById.has(definition.group)) {
+      violations.push(
+        "component " +
+          definition.name +
+          " uses unknown group: " +
+          definition.group,
+      )
+    }
+
+    if (!implementationById.has(definition.reference)) {
+      violations.push(
+        "component " +
+          definition.name +
+          " uses unresolved reference: " +
+          definition.reference,
+      )
+    }
+  }
+
+  return violations
+}
+
+function validateUsage(usage: ComponentUsage): string[] {
   const definition = definitionByName.get(usage.component)
+  const violations: string[] = []
 
   if (!definition) {
     return ["unknown component: " + usage.component]
   }
 
   if (!activeGroupSet.has(definition.group)) {
-    return [
+    violations.push(
       "component " +
-        usage.component +
+        definition.name +
         " belongs to inactive group: " +
         definition.group,
-    ]
+    )
   }
 
-  return []
+  for (const [propName, rule] of Object.entries(definition.props)) {
+    if (rule.required && !(propName in usage.props)) {
+      violations.push("missing required prop: " + propName)
+    }
+  }
+
+  for (const [propName, value] of Object.entries(usage.props)) {
+    const rule = definition.props[propName]
+
+    if (!rule) {
+      violations.push("unknown prop: " + propName)
+      continue
+    }
+
+    if (!matchesType(value, rule.type)) {
+      violations.push(
+        "wrong type for " +
+          propName +
+          ": expected " +
+          rule.type +
+          ", got " +
+          valueType(value),
+      )
+      continue
+    }
+
+    if (
+      rule.enum &&
+      typeof value === "string" &&
+      !rule.enum.includes(value)
+    ) {
+      violations.push(
+        "invalid enum for " +
+          propName +
+          ": " +
+          value +
+          " not in " +
+          rule.enum.join("|"),
+      )
+    }
+  }
+
+  return violations
 }
+
+function resolveReference(componentName: string) {
+  const definition = definitionByName.get(componentName)
+
+  if (!definition) {
+    throw new Error("unknown component: " + componentName)
+  }
+
+  const implementation = implementationById.get(definition.reference)
+
+  if (!implementation) {
+    throw new Error(
+      "unresolved component reference: " +
+        componentName +
+        " -> " +
+        definition.reference,
+    )
+  }
+
+  return {
+    definition,
+    implementation,
+  }
+}
+
+function selectLibraryByGroups(
+  definitions: ComponentDefinition[],
+  selectedGroups: ComponentGroupId[],
+) {
+  const selected = new Set<ComponentGroupId>(selectedGroups)
+
+  return definitions.filter((definition) => selected.has(definition.group))
+}
+
+function propRuleToText(name: string, rule: PropRule): string {
+  const parts = [name + ": " + rule.type]
+  if (rule.required) parts.push("required")
+  if (rule.enum) parts.push("enum=" + rule.enum.join("|"))
+  return parts.join(", ")
+}
+
+const libraryIssues = validateLibrary()
+
+console.log("========== OpenUI Study 02.05 · Component Groups ==========")
+console.log("========== Cumulative Capability ==========")
+console.log("01 names       : YES")
+console.log("02 metadata    : YES")
+console.log("03 props       : YES")
+console.log("04 reference   : YES")
+console.log("05 groups      : NEW")
+console.log()
+
+console.log("========== Library Validation ==========")
+console.log("issues : " + libraryIssues.length)
+
+if (libraryIssues.length > 0) {
+  for (const issue of libraryIssues) {
+    console.log("- " + issue)
+  }
+
+  throw new Error("component library is invalid")
+}
+
+console.log("result : VALID")
+console.log()
+
+const scopedLibrary = selectLibraryByGroups(library, activeGroups)
+
+console.log("========== Component Groups ==========")
+console.table(groups)
+
+console.log("========== Full Component Library ==========")
+console.table(
+  library.map((component) => ({
+    component: component.name,
+    group: component.group,
+    reference: component.reference,
+  })),
+)
+
+console.log("========== Active Groups ==========")
+console.log(activeGroups.join(", "))
+console.log()
+
+console.log("========== Scoped Component Library ==========")
+console.table(
+  scopedLibrary.map((component) => ({
+    component: component.name,
+    group: component.group,
+    reference: component.reference,
+  })),
+)
+
+console.log("full component count   : " + library.length)
+console.log("scoped component count : " + scopedLibrary.length)
+console.log(
+  "hidden component count : " + (library.length - scopedLibrary.length),
+)
+console.log()
+
+const libraryPrompt = scopedLibrary
+  .map((component) => {
+    const props = Object.entries(component.props)
+      .map(([name, rule]) => "    - " + propRuleToText(name, rule))
+      .join("\n")
+
+    return [
+      "- " + component.name + ": " + component.description,
+      "  props:",
+      props || "    - none",
+    ].join("\n")
+  })
+  .join("\n")
+
+const prompt = [
+  userRequest,
+  "",
+  "你只能使用下面当前场景开放的 Component Library。",
+  "没有出现在列表里的组件不能使用。",
+  "",
+  libraryPrompt,
+  "",
+  '只返回合法 JSON：{"page":"","components":[{"component":"","purpose":"","props":{}}]}',
+  "",
+  "- component 必须来自当前开放的 Component Library",
+  "- props 必须符合 schema",
+  "- 不要输出 group",
+  "- 不要输出 reference",
+  "- 不要生成代码",
+].join("\n")
 
 function extractJsonObject(content: string): JsonObject {
   const start = content.indexOf("{")
@@ -235,71 +503,10 @@ function parsePlan(content: string): UiPlan {
   return { page: data.page, components }
 }
 
-const groupDefinitionIssues = validateGroupDefinitions(library)
-
-if (groupDefinitionIssues.length > 0) {
-  console.table(groupDefinitionIssues)
-  throw new Error("component library contains unknown groups")
-}
-
-const scopedLibrary = selectLibraryByGroups(library, activeGroups)
-
-const modelLibrary = scopedLibrary.map(
-  ({ reference: _reference, group: _group, ...visible }) => visible,
-)
-
-const prompt = [
-  userRequest,
-  "",
-  "你只能使用下面当前场景开放的 Component Library。",
-  "没有出现在列表里的组件不能使用。",
-  "",
-  JSON.stringify(modelLibrary, null, 2),
-  "",
-  '只返回合法 JSON：{"page":"","components":[{"component":"","purpose":"","props":{}}]}',
-  "",
-  "- component 必须来自当前开放的 Component Library",
-  "- props 只使用已声明字段",
-  "- 不要输出 group",
-  "- 不要输出 reference",
-  "- 不要生成代码",
-].join("\n")
-
 const provider = new DeepSeekProvider({ apiKey, baseUrl, model })
 
-console.log("========== OpenUI Study 02.05 · Component Groups ==========")
-console.log("provider : " + provider.name)
-console.log("model    : " + provider.model)
-console.log()
-
-console.log("========== Component Groups ==========")
-console.table(groups)
-
-console.log("========== Full Component Library ==========")
-console.table(
-  library.map((component) => ({
-    component: component.name,
-    group: component.group,
-  })),
-)
-
-console.log("========== Active Groups ==========")
-console.log(activeGroups.join(", "))
-console.log()
-
-console.log("========== Scoped Component Library ==========")
-console.table(
-  scopedLibrary.map((component) => ({
-    component: component.name,
-    group: component.group,
-  })),
-)
-
-console.log("full component count   : " + library.length)
-console.log("scoped component count : " + scopedLibrary.length)
-console.log(
-  "hidden component count : " + (library.length - scopedLibrary.length),
-)
+console.log("========== User Request ==========")
+console.log(userRequest)
 console.log()
 
 const response = await provider.chat({
@@ -312,18 +519,34 @@ console.log()
 
 const plan = parsePlan(response.content)
 
-const validations = plan.components.map((usage) => ({
-  usage,
-  violations: validateUsageScope(usage),
-}))
+const validations = plan.components.map((usage) => {
+  const violations = validateUsage(usage)
 
-console.log("========== Group Scope Validation ==========")
+  if (violations.length > 0) {
+    return {
+      usage,
+      violations,
+      resolved: undefined,
+    }
+  }
+
+  return {
+    usage,
+    violations,
+    resolved: resolveReference(usage.component),
+  }
+})
+
+console.log("========== Group + Props + Reference Validation ==========")
 console.table(
-  validations.map(({ usage, violations }) => ({
+  validations.map(({ usage, violations, resolved }) => ({
     component: usage.component,
     group: definitionByName.get(usage.component)?.group ?? "UNKNOWN",
-    violations: violations.length,
-    result: violations.length === 0 ? "ALLOWED" : "REJECTED",
+    propsAndScope: violations.length === 0 ? "VALID" : "INVALID",
+    reference: resolved?.definition.reference ?? "-",
+    source: resolved?.implementation.source ?? "-",
+    result:
+      violations.length === 0 && resolved ? "ALLOWED" : "REJECTED",
   })),
 )
 
@@ -336,69 +559,78 @@ for (const { usage, violations } of validations) {
   }
 }
 
-const invalidUsages = validations.filter((item) => item.violations.length > 0)
+const rejectedUsages = validations.filter(
+  (item) => item.violations.length > 0 || !item.resolved,
+)
 
 console.log()
 console.log("========== Runtime Decision ==========")
-console.log("model usages       : " + validations.length)
-console.log("out-of-scope usages: " + invalidUsages.length)
+console.log("model usages     : " + validations.length)
+console.log("rejected usages  : " + rejectedUsages.length)
 console.log(
-  "result             : " +
-    (invalidUsages.length === 0 ? "ACCEPTED" : "REJECTED"),
+  "result           : " +
+    (rejectedUsages.length === 0 ? "ACCEPTED" : "REJECTED"),
 )
 
-const localOutOfScopeCase: ComponentUsage = {
-  component: "Dialog",
-  purpose: "故意使用当前场景没有开放的 overlay 组件。",
-  props: {
-    title: "确认删除",
-    open: true,
+const localCases: ComponentUsage[] = [
+  {
+    component: "Dialog",
+    purpose: "验证未开放 Group 会被拒绝。",
+    props: {
+      title: "确认删除",
+      open: true,
+    },
   },
-}
-
-const localViolations = validateUsageScope(localOutOfScopeCase)
-
-console.log()
-console.log("========== Local Out-of-Scope Case ==========")
-console.log(JSON.stringify(localOutOfScopeCase, null, 2))
-console.log()
-console.log("active groups : " + activeGroups.join(", "))
-console.log("violations    : " + localViolations.length)
-
-for (const violation of localViolations) {
-  console.log("- " + violation)
-}
-
-console.log(
-  "result        : " +
-    (localViolations.length === 0 ? "ALLOWED" : "REJECTED"),
-)
-
-if (localViolations.length === 0) {
-  throw new Error("local out-of-scope case unexpectedly passed validation")
-}
+  {
+    component: "Button",
+    purpose: "验证 05 仍然保留 03 的 Props Schema 校验。",
+    props: {
+      label: 123,
+      action: "create-task",
+      variant: "rainbow",
+    },
+  },
+]
 
 console.log()
-console.log("========== What Did Groups Change? ==========")
+console.log("========== Local Invalid Cases ==========")
+
+for (const usage of localCases) {
+  const violations = validateUsage(usage)
+
+  console.log("\n[" + usage.component + "]")
+  for (const violation of violations) {
+    console.log("- " + violation)
+  }
+
+  console.log(
+    "result: " + (violations.length === 0 ? "ACCEPTED" : "REJECTED"),
+  )
+
+  if (violations.length === 0) {
+    throw new Error("local invalid case unexpectedly passed: " + usage.component)
+  }
+}
+
+console.log()
+console.log("========== What Can We Validate? ==========")
 console.table([
-  { question: "完整 Library 还保留吗？", result: "YES" },
-  { question: "组件是否有 Group？", result: "YES" },
-  { question: "当前场景是否只暴露部分 Groups？", result: "YES" },
-  { question: "Model 是否还能看到全部组件？", result: "NO" },
-  { question: "Runtime 能否拒绝未开放 Group 的组件？", result: "YES" },
-  { question: "这一节是否自动判断该选哪些 Groups？", result: "NO" },
+  { capability: "Component Name", result: "YES" },
+  { capability: "Component Metadata", result: "YES" },
+  { capability: "Props Schema", result: "YES" },
+  { capability: "Reference Integrity", result: "YES" },
+  { capability: "Resolve To Implementation", result: "YES" },
+  { capability: "Group Scope", result: "YES" },
+  { capability: "Reusable Library Abstraction", result: "NEXT_STEP" },
 ])
 
 console.log("========== Observation ==========")
 console.log(
-  "Component Groups 没有删除完整 Library，而是在完整能力集合上增加了可选择的组织边界。",
+  "05 不是用 Group 替换前面的规则，而是在 name + metadata + props + reference 上继续增加能力分组。",
 )
 console.log(
-  "当前场景只开放 layout + data-display + action，所以 Model 不再看到 form / navigation / overlay。",
+  "System 先把完整 Library 缩成当前 Scope；Model 只在 Scope 中选择，Runtime 仍然校验 props、group 和 reference。",
 )
 console.log(
-  "Group selection 当前仍由 System 明确指定；这一节只证明：组件选择空间可以被确定性缩小。",
-)
-console.log(
-  "下一节 06 · Minimal Component Library 要把 name / description / props / reference / group 收敛成一个完整最小抽象。",
+  "下一节 06 · Minimal Component Library 不再增加新字段，而是把 01～05 的规则收敛成一个真正可复用的 ComponentLibrary。",
 )
