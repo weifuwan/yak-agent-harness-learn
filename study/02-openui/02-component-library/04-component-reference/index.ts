@@ -1,11 +1,18 @@
 import { DeepSeekProvider } from "../../../../mvp/01-llm/07-unified-llm-interface/deepseek-provider.js"
 
 type JsonObject = Record<string, unknown>
+type PropType = "string" | "number" | "boolean" | "string[]"
+
+type PropRule = {
+  type: PropType
+  required?: boolean
+  enum?: string[]
+}
 
 type ComponentDefinition = {
   name: string
   description: string
-  props: Record<string, string>
+  props: Record<string, PropRule>
   reference: string
 }
 
@@ -48,62 +55,214 @@ const implementations: ComponentImplementation[] = [
 ]
 
 const implementationById = new Map(
-  implementations.map((item) => [item.id, item]),
+  implementations.map((implementation) => [implementation.id, implementation]),
 )
 
 const library: ComponentDefinition[] = [
-  { name: "Page", description: "页面根容器。", props: { title: "string required", subtitle: "string" }, reference: "ui.page" },
-  { name: "Card", description: "内容分组容器。", props: { title: "string" }, reference: "ui.card" },
-  { name: "StatCard", description: "展示单个统计指标。", props: { label: "string required", value: "string required", tone: "default|success|warning|danger" }, reference: "ui.stat-card" },
-  { name: "DataTable", description: "展示多行多列数据。", props: { columns: "string[] required", striped: "boolean" }, reference: "ui.data-table" },
-  { name: "StatusBadge", description: "展示简短状态。", props: { status: "running|success|failed|paused", text: "string" }, reference: "ui.status-badge" },
-  { name: "Button", description: "触发用户操作。", props: { label: "string required", action: "string required", variant: "primary|secondary|danger" }, reference: "ui.button" },
-  { name: "Input", description: "输入自由文本。", props: { name: "string required", placeholder: "string" }, reference: "ui.input" },
-  { name: "Select", description: "从有限选项中选择。", props: { name: "string required", options: "string[] required" }, reference: "ui.select" },
-  { name: "Dialog", description: "承载模态交互。", props: { title: "string required", open: "boolean required" }, reference: "ui.dialog" },
-  { name: "Tabs", description: "切换多个并列视图。", props: { items: "string[] required", activeKey: "string" }, reference: "ui.tabs" },
+  {
+    name: "Page",
+    description: "页面根容器，用于承载一个完整页面的主要内容。",
+    props: {
+      title: { type: "string", required: true },
+      subtitle: { type: "string" },
+    },
+    reference: "ui.page",
+  },
+  {
+    name: "Card",
+    description: "内容分组容器，用于把相关信息组织成独立区域。",
+    props: {
+      title: { type: "string" },
+    },
+    reference: "ui.card",
+  },
+  {
+    name: "StatCard",
+    description: "用于展示单个关键统计指标及其简短状态信息。",
+    props: {
+      label: { type: "string", required: true },
+      value: { type: "string", required: true },
+      tone: {
+        type: "string",
+        enum: ["default", "success", "warning", "danger"],
+      },
+    },
+    reference: "ui.stat-card",
+  },
+  {
+    name: "DataTable",
+    description: "用于展示结构化、多行、多列的数据集合。",
+    props: {
+      columns: { type: "string[]", required: true },
+      striped: { type: "boolean" },
+    },
+    reference: "ui.data-table",
+  },
+  {
+    name: "StatusBadge",
+    description: "用于展示简短状态，例如运行中、成功、失败。",
+    props: {
+      status: {
+        type: "string",
+        required: true,
+        enum: ["running", "success", "failed", "paused"],
+      },
+      text: { type: "string" },
+    },
+    reference: "ui.status-badge",
+  },
+  {
+    name: "Button",
+    description: "用于触发明确的用户操作。",
+    props: {
+      label: { type: "string", required: true },
+      action: { type: "string", required: true },
+      variant: {
+        type: "string",
+        enum: ["primary", "secondary", "danger"],
+      },
+    },
+    reference: "ui.button",
+  },
+  {
+    name: "Input",
+    description: "用于输入自由文本，例如名称或搜索关键字。",
+    props: {
+      name: { type: "string", required: true },
+      placeholder: { type: "string" },
+    },
+    reference: "ui.input",
+  },
+  {
+    name: "Select",
+    description: "用于从有限的预定义选项中选择一个值。",
+    props: {
+      name: { type: "string", required: true },
+      options: { type: "string[]", required: true },
+    },
+    reference: "ui.select",
+  },
+  {
+    name: "Dialog",
+    description: "用于需要用户集中处理或确认的模态交互。",
+    props: {
+      title: { type: "string", required: true },
+      open: { type: "boolean", required: true },
+    },
+    reference: "ui.dialog",
+  },
+  {
+    name: "Tabs",
+    description: "用于在同一区域的多个并列视图之间切换。",
+    props: {
+      items: { type: "string[]", required: true },
+      activeKey: { type: "string" },
+    },
+    reference: "ui.tabs",
+  },
 ]
 
-const definitionByName = new Map(library.map((item) => [item.name, item]))
+const definitionByName = new Map(
+  library.map((component) => [component.name, component]),
+)
+
 const userRequest = "帮我做一个数据同步任务列表页面"
 
-const modelLibrary = library.map(({ reference: _reference, ...visible }) => visible)
+function propRuleToText(name: string, rule: PropRule): string {
+  const parts = [name + ": " + rule.type]
+  if (rule.required) parts.push("required")
+  if (rule.enum) parts.push("enum=" + rule.enum.join("|"))
+  return parts.join(", ")
+}
+
+const libraryPrompt = library
+  .map((component) => {
+    const props = Object.entries(component.props)
+      .map(([name, rule]) => "    - " + propRuleToText(name, rule))
+      .join("\n")
+
+    return [
+      "- " + component.name + ": " + component.description,
+      "  props:",
+      props || "    - none",
+    ].join("\n")
+  })
+  .join("\n")
 
 const prompt = [
   userRequest,
-  "你只能使用下面的 Component Library。reference 是 Runtime 内部信息，所以没有暴露给你。",
-  JSON.stringify(modelLibrary, null, 2),
-  '只返回合法 JSON：{"page":"","components":[{"component":"","purpose":"","props":{}}]}',
-  "component 必须来自 Library；props 只使用已声明字段；不要生成 reference；不要生成代码。",
-].join("\n\n")
+  "",
+  "你只能使用下面 Component Library 中声明的 UI 组件和 props。",
+  "reference 是 Runtime 内部信息，不会暴露给 Model。",
+  "",
+  libraryPrompt,
+  "",
+  "请只返回合法 JSON，不要 Markdown，不要解释：",
+  "",
+  "{",
+  '  "page": "",',
+  '  "components": [',
+  "    {",
+  '      "component": "",',
+  '      "purpose": "",',
+  '      "props": {}',
+  "    }",
+  "  ]",
+  "}",
+  "",
+  "- component 必须来自 Library",
+  "- props 必须符合 schema",
+  "- 不要输出 reference",
+  "- 不要生成代码",
+].join("\n")
 
 function extractJsonObject(content: string): JsonObject {
   const start = content.indexOf("{")
   const end = content.lastIndexOf("}")
-  if (start < 0 || end <= start) throw new Error("response does not contain JSON")
 
-  const value: unknown = JSON.parse(content.slice(start, end + 1))
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("top-level JSON must be object")
+  if (start < 0 || end <= start) {
+    throw new Error("response does not contain a JSON object")
   }
-  return value as JsonObject
+
+  const parsed: unknown = JSON.parse(content.slice(start, end + 1))
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("top-level JSON value is not an object")
+  }
+
+  return parsed as JsonObject
 }
 
 function parsePlan(content: string): UiPlan {
   const data = extractJsonObject(content)
-  if (typeof data.page !== "string") throw new Error("page must be string")
-  if (!Array.isArray(data.components)) throw new Error("components must be array")
+
+  if (typeof data.page !== "string") {
+    throw new Error("page must be string")
+  }
+
+  if (!Array.isArray(data.components)) {
+    throw new Error("components must be array")
+  }
 
   const components = data.components.map((item, index) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) {
       throw new Error("components[" + index + "] must be object")
     }
+
     const object = item as JsonObject
-    if (typeof object.component !== "string") throw new Error("component must be string")
-    if (typeof object.purpose !== "string") throw new Error("purpose must be string")
-    if (!object.props || typeof object.props !== "object" || Array.isArray(object.props)) {
-      throw new Error("props must be object")
+
+    if (typeof object.component !== "string") {
+      throw new Error("components[" + index + "].component must be string")
     }
+
+    if (typeof object.purpose !== "string") {
+      throw new Error("components[" + index + "].purpose must be string")
+    }
+
+    if (!object.props || typeof object.props !== "object" || Array.isArray(object.props)) {
+      throw new Error("components[" + index + "].props must be object")
+    }
+
     return {
       component: object.component,
       purpose: object.purpose,
@@ -112,6 +271,81 @@ function parsePlan(content: string): UiPlan {
   })
 
   return { page: data.page, components }
+}
+
+function matchesType(value: unknown, type: PropType): boolean {
+  if (type === "string") return typeof value === "string"
+  if (type === "number") return typeof value === "number"
+  if (type === "boolean") return typeof value === "boolean"
+
+  if (type === "string[]") {
+    return Array.isArray(value) && value.every((item) => typeof item === "string")
+  }
+
+  return false
+}
+
+function valueType(value: unknown): string {
+  if (Array.isArray(value)) {
+    const itemTypes = [...new Set(value.map((item) => typeof item))]
+    return "array<" + itemTypes.join("|") + ">"
+  }
+
+  if (value === null) return "null"
+  return typeof value
+}
+
+function validateProps(usage: ComponentUsage): string[] {
+  const definition = definitionByName.get(usage.component)
+  const violations: string[] = []
+
+  if (!definition) {
+    return ["unknown component: " + usage.component]
+  }
+
+  for (const [propName, rule] of Object.entries(definition.props)) {
+    if (rule.required && !(propName in usage.props)) {
+      violations.push("missing required prop: " + propName)
+    }
+  }
+
+  for (const [propName, value] of Object.entries(usage.props)) {
+    const rule = definition.props[propName]
+
+    if (!rule) {
+      violations.push("unknown prop: " + propName)
+      continue
+    }
+
+    if (!matchesType(value, rule.type)) {
+      violations.push(
+        "wrong type for " +
+          propName +
+          ": expected " +
+          rule.type +
+          ", got " +
+          valueType(value),
+      )
+      continue
+    }
+
+    if (
+      rule.enum &&
+      typeof value === "string" &&
+      !rule.enum.includes(value)
+    ) {
+      violations.push(
+        "invalid enum for " +
+          propName +
+          ": " +
+          value +
+          " not in " +
+          rule.enum.join("|"),
+      )
+    }
+  }
+
+  return violations
 }
 
 function collectUnresolvedReferences(definitions: ComponentDefinition[]) {
@@ -125,40 +359,60 @@ function collectUnresolvedReferences(definitions: ComponentDefinition[]) {
 
 function resolveReference(componentName: string) {
   const definition = definitionByName.get(componentName)
-  if (!definition) throw new Error("unknown component: " + componentName)
 
-  const implementation = implementationById.get(definition.reference)
-  if (!implementation) {
-    throw new Error("unresolved reference: " + definition.reference)
+  if (!definition) {
+    throw new Error("unknown component: " + componentName)
   }
 
-  return { definition, implementation }
+  const implementation = implementationById.get(definition.reference)
+
+  if (!implementation) {
+    throw new Error(
+      "unresolved component reference: " +
+        componentName +
+        " -> " +
+        definition.reference,
+    )
+  }
+
+  return {
+    definition,
+    implementation,
+  }
 }
 
-const provider = new DeepSeekProvider({ apiKey, baseUrl, model })
+const libraryReferenceIssues = collectUnresolvedReferences(library)
 
 console.log("========== OpenUI Study 02.04 · Component Reference ==========")
-console.log("provider : " + provider.name)
-console.log("model    : " + provider.model)
+console.log("========== Cumulative Capability ==========")
+console.log("01 names       : YES")
+console.log("02 metadata    : YES")
+console.log("03 props       : YES")
+console.log("04 reference   : NEW")
 console.log()
 
 console.log("========== Implementation Registry ==========")
 console.table(implementations)
 
-console.log("========== Library References ==========")
-console.table(library.map((item) => ({ component: item.name, reference: item.reference })))
-
-const libraryReferenceIssues = collectUnresolvedReferences(library)
-
 console.log("========== Library Reference Validation ==========")
 console.log("definitions          : " + library.length)
 console.log("unresolved references: " + libraryReferenceIssues.length)
-console.log("result               : " + (libraryReferenceIssues.length === 0 ? "VALID" : "INVALID"))
+console.log(
+  "result               : " +
+    (libraryReferenceIssues.length === 0 ? "VALID" : "INVALID"),
+)
 
 if (libraryReferenceIssues.length > 0) {
   console.table(libraryReferenceIssues)
   throw new Error("component library contains unresolved references")
 }
+
+const provider = new DeepSeekProvider({ apiKey, baseUrl, model })
+
+console.log()
+console.log("========== User Request ==========")
+console.log(userRequest)
+console.log()
 
 const response = await provider.chat({
   messages: [{ role: "user", content: prompt }],
@@ -169,26 +423,84 @@ console.log(response.content)
 console.log()
 
 const plan = parsePlan(response.content)
-const uniqueComponents = [...new Set(plan.components.map((item) => item.component))]
 
-const resolved = uniqueComponents.map((component) => {
-  const { definition, implementation } = resolveReference(component)
+const validations = plan.components.map((usage) => {
+  const propViolations = validateProps(usage)
+
+  if (propViolations.length > 0) {
+    return {
+      usage,
+      propViolations,
+      resolved: undefined,
+    }
+  }
+
   return {
-    component,
-    reference: definition.reference,
-    source: implementation.source,
-    exportName: implementation.exportName,
+    usage,
+    propViolations,
+    resolved: resolveReference(usage.component),
   }
 })
 
-console.log("========== Reference Resolution ==========")
-console.table(resolved)
+console.log("========== Props + Reference Validation ==========")
+console.table(
+  validations.map(({ usage, propViolations, resolved }) => ({
+    component: usage.component,
+    props: propViolations.length === 0 ? "VALID" : "INVALID",
+    reference: resolved?.definition.reference ?? "-",
+    source: resolved?.implementation.source ?? "-",
+    result:
+      propViolations.length === 0 && resolved ? "RESOLVED" : "REJECTED",
+  })),
+)
 
+for (const { usage, propViolations } of validations) {
+  if (propViolations.length === 0) continue
+
+  console.log("\n[" + usage.component + "]")
+  for (const violation of propViolations) {
+    console.log("- " + violation)
+  }
+}
+
+const rejectedUsages = validations.filter(
+  (item) => item.propViolations.length > 0 || !item.resolved,
+)
+
+console.log()
 console.log("========== Runtime Decision ==========")
-console.log("used component types : " + uniqueComponents.length)
-console.log("resolved references  : " + resolved.length)
-console.log("unresolved references: 0")
-console.log("result               : RESOLVED")
+console.log("component usages : " + validations.length)
+console.log("rejected usages  : " + rejectedUsages.length)
+console.log(
+  "result           : " +
+    (rejectedUsages.length === 0 ? "ACCEPTED" : "REJECTED"),
+)
+
+const localInvalidPropsCase: ComponentUsage = {
+  component: "Button",
+  purpose: "验证 04 仍然保留 03 的 Props Schema 确定性。",
+  props: {
+    label: 123,
+    action: "create-task",
+    variant: "rainbow",
+  },
+}
+
+const localPropViolations = validateProps(localInvalidPropsCase)
+
+console.log()
+console.log("========== Local Invalid Props Case ==========")
+for (const violation of localPropViolations) {
+  console.log("- " + violation)
+}
+console.log(
+  "result : " +
+    (localPropViolations.length === 0 ? "ACCEPTED" : "REJECTED"),
+)
+
+if (localPropViolations.length === 0) {
+  throw new Error("invalid props case unexpectedly passed")
+}
 
 const brokenDefinition: ComponentDefinition = {
   name: "BrokenButton",
@@ -196,32 +508,41 @@ const brokenDefinition: ComponentDefinition = {
   props: {},
   reference: "ui.missing-button",
 }
+
 const brokenReferenceIssues = collectUnresolvedReferences([brokenDefinition])
 
 console.log()
 console.log("========== Local Broken Reference Case ==========")
-console.log("component : " + brokenDefinition.name)
-console.log("reference : " + brokenDefinition.reference)
-console.log("resolved  : " + (brokenReferenceIssues.length === 0 ? "YES" : "NO"))
-console.log("result    : " + (brokenReferenceIssues.length === 0 ? "RESOLVED" : "UNRESOLVED"))
+console.table(brokenReferenceIssues)
+console.log("issues : " + brokenReferenceIssues.length)
+console.log(
+  "result : " +
+    (brokenReferenceIssues.length === 0 ? "RESOLVED" : "UNRESOLVED"),
+)
 
 if (brokenReferenceIssues.length !== 1) {
-  throw new Error("broken reference case did not produce exactly one unresolved reference")
+  throw new Error("broken reference case should contain exactly one issue")
 }
 
 console.log()
 console.log("========== What Can We Validate? ==========")
 console.table([
-  { question: "组件名是否允许？", result: "YES" },
-  { question: "Props 是否符合 Schema？", result: "PREVIOUS_STEP" },
-  { question: "Definition 是否有 reference？", result: "YES" },
-  { question: "reference 是否能解析？", result: "YES" },
-  { question: "真实实现身份是否确定？", result: "YES" },
-  { question: "现在是否真正 Render React？", result: "NO" },
+  { capability: "Component Name", result: "YES" },
+  { capability: "Component Metadata", result: "YES" },
+  { capability: "Props Schema", result: "YES" },
+  { capability: "Reference Integrity", result: "YES" },
+  { capability: "Resolve To Implementation", result: "YES" },
+  { capability: "Group Scope", result: "NEXT_STEP" },
+  { capability: "React Render", result: "NO" },
 ])
 
 console.log("========== Observation ==========")
-console.log("Component Reference 把抽象 Definition 与真实实现身份连接起来。")
-console.log("Model 只选 Button；Runtime 决定 Button -> ui.button -> src/components/Button.tsx。")
-console.log("reference 属于 System-owned Runtime Knowledge，不应该由 Model 每次猜。")
-console.log("下一节 05 · Component Groups 研究组件多起来以后如何组织选择空间。")
+console.log(
+  "04 不是用 Reference 替换 Props Schema，而是在 01～03 的确定性上继续增加实现映射。",
+)
+console.log(
+  "Model 只选择抽象组件并填写合法 props；Runtime 决定 reference 最终指向哪个真实实现。",
+)
+console.log(
+  "下一节 05 · Component Groups 会在这套完整 Definition 上继续增加 group，用来缩小每轮模型的组件选择空间。",
+)
