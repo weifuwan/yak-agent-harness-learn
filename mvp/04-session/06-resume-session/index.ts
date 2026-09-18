@@ -1,3 +1,4 @@
+import type { Tool } from "../../02-tool/07-unified-tool-interface/types.js"
 import {
   createSessionStore,
   getOrCreateSession,
@@ -10,7 +11,7 @@ import {
 
 const sessionId = "session-resume"
 const maxSteps = 2
-const tools = []
+const tools: Tool[] = []
 const rememberedCode = "RESUME-0601"
 
 const firstPrompt =
