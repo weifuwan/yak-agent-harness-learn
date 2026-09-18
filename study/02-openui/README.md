@@ -283,8 +283,8 @@ examples/harnesses/
 ## 当前进度
 
 ```text
-[>] 01 No UI Harness
-[ ] 02 Component Library
+[x] 01 No UI Harness
+[>] 02 Component Library
 [ ] 03 Library → Prompt
 [ ] 04 UI Language / Parser
 [ ] 05 Runtime
@@ -292,4 +292,4 @@ examples/harnesses/
 [ ] 07 Minimal Frontend Harness
 ```
 
-当前只推进 `01-no-ui-harness`，其余目录只是学习边界。
+当前推进 `02-component-library/06-minimal-component-library`。Component Library 收敛完成并实际跑通后，再进入 `03-library-to-prompt`。
