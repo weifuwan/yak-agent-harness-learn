@@ -6,6 +6,8 @@
 
 所属章节：`Component Library`
 
+## 为什么还需要 Reference？
+
 前面已经有：
 
 ```text
@@ -14,17 +16,19 @@ description
 props schema
 ```
 
-现在系统知道：
+系统已经知道：
 
 ```text
-组件叫什么
-组件是什么意思
-组件允许怎么配置
+Button 是什么
+Button 能怎么配置
 ```
 
-但仍然不知道：
+但还不知道：
 
-> **这个抽象 Button 到底对应项目里的哪个真实 Button？**
+```text
+Button
+到底对应哪个真实实现？
+```
 
 这一节只新增：
 
@@ -32,16 +36,28 @@ props schema
 reference
 ```
 
----
+## 能力累积
 
-## ① Definition 和 Implementation 是两回事
+```text
+01 name
++
+02 description
++
+03 props schema
++
+04 reference
+```
+
+注意：04 **保留 03 的 Props Validation**，不是用 reference 把 props schema 替掉。
+
+## Definition 与 Implementation 分开
 
 Library Definition：
 
 ```text
 Button
 ├── description
-├── props schema
+├── props
 └── reference = ui.button
 ```
 
@@ -53,7 +69,7 @@ ui.button
 └── exportName = Button
 ```
 
-Runtime 通过 reference 把两边连接起来：
+Runtime：
 
 ```text
 Button
@@ -65,120 +81,68 @@ src/components/Button.tsx
 Button export
 ```
 
----
+## 为什么不让 Model 输出源码路径？
 
-## ② 为什么不直接让 Model 输出源码路径？
-
-如果让 Model 每次决定：
+如果让 Model 每次猜：
 
 ```text
 src/components/Button.tsx
 src/ui/Button.tsx
 @/components/ui/button
-...
 ```
 
-那“组件在哪里”又重新变成了 Model-owned Decision。
+“组件在哪里”又回到了 Model-owned Decision。
 
 所以：
 
-> **Model 只选择抽象组件名，Runtime 负责解析真实实现。**
-
-reference 属于 System-owned Runtime Knowledge。
-
----
-
-## ③ 这一节不做 Renderer
-
-虽然现在已经能找到：
-
 ```text
-source
-exportName
+Model
+→ 选择抽象组件
+
+Runtime
+→ 解析真实实现
 ```
 
-但程序不会：
+## 固定失败 Case
+
+### Invalid Props
+
+04 会继续验证：
 
 ```text
-import React Component
-createElement
-render
-mount DOM
-```
-
-这里只证明：
-
-> **Definition 可以稳定解析到真实实现身份。**
-
-真正渲染属于后面的 Renderer 章节。
-
----
-
-## ④ 实验
-
-还是：
-
-```text
-帮我做一个数据同步任务列表页面
-```
-
-Model 仍然只输出：
-
-```text
-component
-purpose
-props
-```
-
-它**不输出 reference**。
-
-Runtime 自己执行：
-
-```text
-component name
+Button
+label = 123
+variant = rainbow
 ↓
-Library Definition
-↓
-reference
-↓
-Implementation Registry
-↓
-source + exportName
+REJECTED
 ```
 
----
+证明 03 的能力没有丢。
 
-## ⑤ 本地 Broken Reference Case
+### Broken Reference
 
-为了验证失败路径，固定加入：
+固定构造：
 
 ```text
 BrokenButton
 reference = ui.missing-button
 ```
 
-Registry 中故意没有：
+Registry 中不存在：
 
 ```text
 ui.missing-button
 ```
 
-预期：
+结果：
 
 ```text
-resolved = NO
-result   = UNRESOLVED
+UNRESOLVED
 ```
 
-这样能确认：
+Library 在调用 Model 前也会扫描全部 reference。
 
-> reference 不只是说明文字，而是 Runtime 真正可以检查的连接。
-
-同一套检查也会在调用 Model 之前扫描整个 Component Library。这样即使某个坏 reference 这次没有被 Model 选中，也不会悄悄留在 Library 里。
-
----
-
-## ⑥ 运行
+## 运行
 
 ```bash
 npm run openui:02:04
@@ -187,68 +151,32 @@ npm run openui:02:04
 重点看：
 
 ```text
+Cumulative Capability
 Implementation Registry
-Library References
 Library Reference Validation
 Model Output
-Reference Resolution
-Runtime Decision
+Props + Reference Validation
+Local Invalid Props Case
 Local Broken Reference Case
 ```
 
----
+## 这一节解决了什么？
 
-## ⑦ 这一节拿回了什么？
-
-前面：
-
-```text
-01 有哪些组件
-02 组件是什么意思
-03 组件允许怎么配置
-```
-
-现在：
-
-```text
-04 组件到底对应哪个真实实现
-```
-
-于是 Component Definition 已经开始形成：
+现在 Component Definition 已经有：
 
 ```text
 name
 description
-props schema
+props
 reference
 ```
 
-但组件越来越多以后，还会出现一个新问题：
+但组件越来越多以后又出现问题：
 
-> **是不是每次都把所有组件全部塞给 Model？**
-
-下一节进入 Component Groups。
-
----
-
-## Done
-
-跑完后能回答：
-
-- [ ] Component Reference 解决的是什么问题？
-- [ ] 为什么 reference 不应该由 Model 每次生成？
-- [ ] Definition 和 Implementation 有什么区别？
-- [ ] Runtime 怎么知道一个 reference 是否有效？
-- [ ] 为什么能 Resolve reference 仍然不等于已经 Render？
-
-全部能回答后，本节完成。
+> **是不是每次都把全部组件暴露给 Model？**
 
 下一节：
 
 ```text
 05 · Component Groups
 ```
-
-下一节只增加一个问题：
-
-> **组件越来越多以后，怎样组织它们，避免所有能力永远平铺给 Model？**
