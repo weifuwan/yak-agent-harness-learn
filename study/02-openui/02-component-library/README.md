@@ -19,15 +19,15 @@
 → 06 Minimal Component Library
 ```
 
-当前先从最小问题开始：
+当前进入下一小节：
 
-> **系统能不能先拥有“允许使用哪些组件”的名单？**
+> **只有组件名字时，Model 还不知道组件到底是干什么的。**
 
 ## 当前进度
 
 ```text
-[>] 01 Raw Component Names
-[ ] 02 Component Metadata
+[x] 01 Raw Component Names
+[>] 02 Component Metadata
 [ ] 03 Props Schema
 [ ] 04 Component Reference
 [ ] 05 Component Groups
