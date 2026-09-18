@@ -1,8 +1,9 @@
+import type { Tool } from "../../02-tool/07-unified-tool-interface/types.js"
 import { createSession } from "./session.js"
 import { runAgentWithSession } from "./runtime.js"
 
 const session = createSession()
-const tools = []
+const tools: Tool[] = []
 const maxSteps = 2
 
 const firstPrompt =
