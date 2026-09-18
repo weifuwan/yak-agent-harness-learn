@@ -135,6 +135,10 @@ const provider = new DeepSeekProvider({
 })
 
 console.log("========== OpenUI Study 02.02 · Component Metadata ==========")
+console.log("========== Cumulative Capability ==========")
+console.log("01 names       : YES")
+console.log("02 metadata    : NEW")
+console.log()
 console.log("provider : " + provider.name)
 console.log("model    : " + provider.model)
 console.log()
@@ -178,6 +182,27 @@ if (missingMetadata.length > 0) {
   console.log("missing descriptions:")
   for (const name of missingMetadata) console.log("- " + name)
 }
+
+const localUnknownCase = "FancyTable"
+const localUnknownMetadata = byName.get(localUnknownCase)
+
+console.log()
+console.log("========== Local Unknown Component Case ==========")
+console.log("component : " + localUnknownCase)
+console.log("metadata  : " + (localUnknownMetadata ? "FOUND" : "MISSING"))
+console.log("result    : " + (localUnknownMetadata ? "ACCEPTED" : "REJECTED"))
+
+if (localUnknownMetadata) {
+  throw new Error("unknown metadata case unexpectedly passed")
+}
+
+console.log()
+console.log("========== Semantic Limitation Case ==========")
+console.log("component          : DataTable")
+console.log("library description: " + byName.get("DataTable")?.description)
+console.log("model purpose      : 用来打开删除确认弹窗")
+console.log("automatic verdict  : NOT_AVAILABLE")
+console.log("reason             : description 是自然语言语义，不是可执行规则")
 
 console.log()
 console.log("========== Metadata Lookup ==========")
