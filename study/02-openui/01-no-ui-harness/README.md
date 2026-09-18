@@ -4,8 +4,6 @@
 
 状态：`IMPLEMENTED · WAITING FOR RUN`
 
-> 如果只给模型一句前端需求，不提供任何 Frontend Harness，会发生什么？
-
 这一节故意**不解决问题**，只观察问题。
 
 ---

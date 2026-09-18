@@ -4,8 +4,6 @@
 
 状态：`CURRENT`
 
-> 模型为什么不能每次都自己发明 Button、Card、Table？
-
 这一章只建立一个最小组件库，不碰 Parser 和 Runtime。
 
 学习路线：

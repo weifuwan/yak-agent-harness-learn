@@ -2,8 +2,6 @@
 
 > 核心问题：**前面的 Library、Prompt、Language、Runtime 和 Renderer，怎么真正串成一条可用的 Frontend Harness？**
 
-> Library、Prompt Spec、Parser、Runtime、Renderer 都有了以后，怎样把它们组合成一个最小 Frontend Harness？
-
 最终链路：
 
 ```text
