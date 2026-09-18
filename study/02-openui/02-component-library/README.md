@@ -19,7 +19,7 @@
 
 当前进入下一小节：
 
-> **组件已经能连接到真实实现以后，组件越来越多时，怎么缩小 Model 每次面对的选择空间？**
+> **Names、Metadata、Props、Reference、Groups 都有了以后，怎么把这些规则收敛成一个真正可复用的 ComponentLibrary？**
 
 ## 当前进度
 
@@ -28,8 +28,8 @@
 [x] 02 Component Metadata
 [x] 03 Props Schema
 [x] 04 Component Reference
-[>] 05 Component Groups
-[ ] 06 Minimal Component Library
+[x] 05 Component Groups
+[>] 06 Minimal Component Library
 ```
 
 OpenUI 对照：
