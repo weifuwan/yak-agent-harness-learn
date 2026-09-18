@@ -1,6 +1,6 @@
 # 01 · Single Generation
 
-状态：`IMPLEMENTED · WAITING FOR RUN`
+状态：`COMPLETE`
 
 所属章节：`No UI Harness`
 
@@ -151,10 +151,10 @@ Runtime / Renderer
 
 跑完后能回答：
 
-- [ ] 用户实际只提供了什么？
-- [ ] 模型为了完成需求，又主动补出了什么？
-- [ ] 我能区分“业务需求”和“模型假设”。
-- [ ] 我能解释：No Harness 时，大量前端决定默认属于 Model。
+- [x] 用户实际只提供了什么？
+- [x] 模型为了完成需求，又主动补出了什么？
+- [x] 我能区分“业务需求”和“模型假设”。
+- [x] 我能解释：No Harness 时，大量前端决定默认属于 Model。
 
 全部能回答后，本节完成。
 
