@@ -123,6 +123,34 @@ ACCEPTED
 → REJECTED
 ```
 
+为了真正跑到失败路径，本节还固定加入一个本地非法 Case：
+
+```text
+Button
+
+label   = 123
+action  = 缺失
+variant = rainbow
+magic   = true
+```
+
+预期 Runtime 能同时识别：
+
+```text
+wrong type
+missing required
+invalid enum
+unknown prop
+```
+
+并得到：
+
+```text
+REJECTED
+```
+
+这个 Case 完全本地执行，不调用 LLM。
+
 这和 description 已经不是一回事。
 
 ---
@@ -199,6 +227,7 @@ Component Library
 Model Output
 Props Validation
 Runtime Decision
+Local Invalid Case
 What Can We Validate?
 ```
 
