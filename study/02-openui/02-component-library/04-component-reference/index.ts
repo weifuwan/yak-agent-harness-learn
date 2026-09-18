@@ -114,6 +114,15 @@ function parsePlan(content: string): UiPlan {
   return { page: data.page, components }
 }
 
+function collectUnresolvedReferences(definitions: ComponentDefinition[]) {
+  return definitions
+    .filter((definition) => !implementationById.has(definition.reference))
+    .map((definition) => ({
+      component: definition.name,
+      reference: definition.reference,
+    }))
+}
+
 function resolveReference(componentName: string) {
   const definition = definitionByName.get(componentName)
   if (!definition) throw new Error("unknown component: " + componentName)
@@ -138,6 +147,18 @@ console.table(implementations)
 
 console.log("========== Library References ==========")
 console.table(library.map((item) => ({ component: item.name, reference: item.reference })))
+
+const libraryReferenceIssues = collectUnresolvedReferences(library)
+
+console.log("========== Library Reference Validation ==========")
+console.log("definitions          : " + library.length)
+console.log("unresolved references: " + libraryReferenceIssues.length)
+console.log("result               : " + (libraryReferenceIssues.length === 0 ? "VALID" : "INVALID"))
+
+if (libraryReferenceIssues.length > 0) {
+  console.table(libraryReferenceIssues)
+  throw new Error("component library contains unresolved references")
+}
 
 const response = await provider.chat({
   messages: [{ role: "user", content: prompt }],
@@ -175,17 +196,17 @@ const brokenDefinition: ComponentDefinition = {
   props: {},
   reference: "ui.missing-button",
 }
-const brokenImplementation = implementationById.get(brokenDefinition.reference)
+const brokenReferenceIssues = collectUnresolvedReferences([brokenDefinition])
 
 console.log()
 console.log("========== Local Broken Reference Case ==========")
 console.log("component : " + brokenDefinition.name)
 console.log("reference : " + brokenDefinition.reference)
-console.log("resolved  : " + (brokenImplementation ? "YES" : "NO"))
-console.log("result    : " + (brokenImplementation ? "RESOLVED" : "UNRESOLVED"))
+console.log("resolved  : " + (brokenReferenceIssues.length === 0 ? "YES" : "NO"))
+console.log("result    : " + (brokenReferenceIssues.length === 0 ? "RESOLVED" : "UNRESOLVED"))
 
-if (brokenImplementation) {
-  throw new Error("broken reference case unexpectedly resolved")
+if (brokenReferenceIssues.length !== 1) {
+  throw new Error("broken reference case did not produce exactly one unresolved reference")
 }
 
 console.log()
