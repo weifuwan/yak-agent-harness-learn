@@ -1,6 +1,6 @@
 # 03 · Decision Drift
 
-状态：IMPLEMENTED · WAITING FOR RUN
+状态：COMPLETE
 
 所属章节：No UI Harness
 
@@ -110,11 +110,11 @@ Schema Drift
 
 跑完后能回答：
 
-- [ ] 为什么要把前端决定结构化？
-- [ ] 哪些 decision 在当前 3 个样本里发生 Drift？
-- [ ] 哪些 decision 当前相对稳定？
-- [ ] 为什么 STABLE_THIS_RUN 不能说明它已经成为 Harness 规则？
-- [ ] 我能区分 Decision Drift 和 Schema Drift。
+- [x] 为什么要把前端决定结构化？
+- [x] 哪些 decision 在当前 3 个样本里发生 Drift？
+- [x] 哪些 decision 当前相对稳定？
+- [x] 为什么 STABLE_THIS_RUN 不能说明它已经成为 Harness 规则？
+- [x] 我能区分 Decision Drift 和 Schema Drift。
 
 下一节：
 
