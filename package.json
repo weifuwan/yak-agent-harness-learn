@@ -83,11 +83,12 @@
     "openui:01:05": "node --import tsx study/02-openui/01-no-ui-harness/05-no-harness-observation/index.ts",
     "openui:02:01": "node --env-file=.env --import tsx study/02-openui/02-component-library/01-raw-component-names/index.ts",
     "openui:02:02": "node --env-file=.env --import tsx study/02-openui/02-component-library/02-component-metadata/index.ts",
-    "openui:02:03": "node --env-file=.env --import tsx study/02-openui/02-component-library/03-props-schema/index.ts"
+    "openui:02:03": "node --env-file=.env --import tsx study/02-openui/02-component-library/03-props-schema/index.ts",
+    "openui:02:04": "node --env-file=.env --import tsx study/02-openui/02-component-library/04-component-reference/index.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }
-}
+}\n
