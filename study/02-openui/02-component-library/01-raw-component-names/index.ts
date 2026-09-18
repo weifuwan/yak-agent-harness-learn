@@ -126,6 +126,9 @@ const provider = new DeepSeekProvider({
 })
 
 console.log("========== OpenUI Study 02.01 · Raw Component Names ==========")
+console.log("========== Cumulative Capability ==========")
+console.log("01 names       : NEW")
+console.log()
 console.log("provider : " + provider.name)
 console.log("model    : " + provider.model)
 console.log()
@@ -169,6 +172,19 @@ if (unknownNames.length > 0) {
   }
 } else {
   console.log("result             : ALL_COMPONENT_NAMES_ALLOWED")
+}
+
+const localUnknownCase = "FancyTable"
+const localUnknownAllowed = allowedComponents.has(localUnknownCase)
+
+console.log()
+console.log("========== Local Unknown Component Case ==========")
+console.log("component : " + localUnknownCase)
+console.log("allowed   : " + (localUnknownAllowed ? "YES" : "NO"))
+console.log("result    : " + (localUnknownAllowed ? "ACCEPTED" : "REJECTED"))
+
+if (localUnknownAllowed) {
+  throw new Error("unknown component case unexpectedly passed")
 }
 
 console.log()
