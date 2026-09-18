@@ -1,3 +1,4 @@
+import type { Tool } from "../../02-tool/07-unified-tool-interface/types.js"
 import {
   createSessionStore,
   getOrCreateSession,
@@ -6,7 +7,7 @@ import { runAgentInSession } from "./runtime.js"
 
 const sessionStore = createSessionStore()
 const maxSteps = 2
-const tools = []
+const tools: Tool[] = []
 
 const sessionA = "session-a"
 const sessionB = "session-b"
