@@ -1,5 +1,7 @@
 # 05 · Component Groups
 
+> 核心问题：**组件越来越多以后，怎么组织它们，避免每次把全部能力平铺给模型？**
+
 状态：`PLANNED`
 
 所属章节：`Component Library`

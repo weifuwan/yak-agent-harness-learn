@@ -1,5 +1,7 @@
 # 04 · Parse AST
 
+> 核心问题：**Token 有了以后，怎么把线性文本恢复成系统可以理解和检查的 UI 结构？**
+
 状态：`PLANNED`
 
 所属章节：`UI Language / Parser`

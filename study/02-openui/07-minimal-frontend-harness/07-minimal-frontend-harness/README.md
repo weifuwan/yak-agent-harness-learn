@@ -1,5 +1,7 @@
 # 07 · Minimal Frontend Harness
 
+> 核心问题：**怎样把整条链封装成一个最小、可复用、可继续扩展的 Frontend Harness？**
+
 状态：`PLANNED`
 
 所属章节：`Minimal Frontend Harness`

@@ -1,5 +1,7 @@
 # 03 · Variables
 
+> 核心问题：**界面里的动态值放在哪里，Runtime 怎样读取和更新这些值？**
+
 状态：`PLANNED`
 
 所属章节：`Runtime`

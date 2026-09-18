@@ -1,5 +1,7 @@
 # 02 · References
 
+> 核心问题：**UI 节点之间需要共享和定位数据时，怎样建立稳定的 Reference？**
+
 状态：`PLANNED`
 
 所属章节：`Runtime`

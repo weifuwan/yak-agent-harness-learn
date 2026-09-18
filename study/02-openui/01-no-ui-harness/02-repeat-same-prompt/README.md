@@ -1,10 +1,10 @@
 # 02 · Repeat Same Prompt
 
+> 核心问题：**同一个前端需求重复生成，结果真的会稳定吗？**
+
 状态：`COMPLETE`
 
 所属章节：`No UI Harness`
-
-## 核心问题
 
 上一节已经确认：
 

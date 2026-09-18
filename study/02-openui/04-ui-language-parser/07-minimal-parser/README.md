@@ -1,5 +1,7 @@
 # 07 · Minimal Parser
 
+> 核心问题：**怎样把 Tokenize、Parse 和 Validation 串成一个最小可用 Parser？**
+
 状态：`PLANNED`
 
 所属章节：`UI Language / Parser`

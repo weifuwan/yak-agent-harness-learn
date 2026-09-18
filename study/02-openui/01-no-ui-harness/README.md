@@ -1,10 +1,8 @@
 # 01 · No UI Harness
 
+> 核心问题：**没有任何 UI Harness 时，模型生成前端到底会出现哪些不稳定？**
+
 状态：`IMPLEMENTED · WAITING FOR RUN`
-
-核心问题：
-
-> 如果只给模型一句前端需求，不提供任何 Frontend Harness，会发生什么？
 
 这一节故意**不解决问题**，只观察问题。
 

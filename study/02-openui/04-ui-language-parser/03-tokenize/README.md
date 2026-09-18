@@ -1,5 +1,7 @@
 # 03 · Tokenize
 
+> 核心问题：**模型输出了一段 UI Language 文本以后，程序怎么把它拆成 Parser 能处理的最小单元？**
+
 状态：`PLANNED`
 
 所属章节：`UI Language / Parser`

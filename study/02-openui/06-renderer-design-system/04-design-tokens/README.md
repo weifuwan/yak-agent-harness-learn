@@ -1,5 +1,7 @@
 # 04 · Design Tokens
 
+> 核心问题：**颜色、间距、圆角这些视觉决定，怎样从模型输出里收回来交给 Design Tokens？**
+
 状态：`PLANNED`
 
 所属章节：`Renderer / Design System`

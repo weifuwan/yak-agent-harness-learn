@@ -1,5 +1,7 @@
 # 07 · Minimal Runtime
 
+> 核心问题：**怎样把 Reference、Variable、Expression、Builtin 和 Action 收敛成一个最小 Runtime？**
+
 状态：`PLANNED`
 
 所属章节：`Runtime`

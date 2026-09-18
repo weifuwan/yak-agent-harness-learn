@@ -1,8 +1,6 @@
 # 06 · Renderer / Design System
 
-核心问题：
-
-> 同一棵 UI Tree，怎样稳定渲染成真实 React UI，并保持统一视觉系统？
+> 核心问题：**Runtime 已经算出 UI 状态以后，怎么稳定渲染成真实界面，同时不把视觉风格重新交给模型？**
 
 这一节把 Runtime 输出交给 Renderer，并引入最小 Design System。
 

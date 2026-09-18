@@ -1,5 +1,7 @@
 # 04 · Expressions
 
+> 核心问题：**只有变量还不够时，怎样计算派生值，又不让模型直接注入任意 JavaScript？**
+
 状态：`PLANNED`
 
 所属章节：`Runtime`

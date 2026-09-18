@@ -1,10 +1,10 @@
 # 03 · Props Schema
 
+> 核心问题：**知道组件用途以后，怎么限制模型只能使用合法 Props？**
+
 状态：`IMPLEMENTED · WAITING FOR RUN`
 
 所属章节：`Component Library`
-
-## 核心问题
 
 前两节已经有：
 

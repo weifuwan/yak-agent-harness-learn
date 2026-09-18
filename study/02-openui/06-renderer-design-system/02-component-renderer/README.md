@@ -1,5 +1,7 @@
 # 02 · Component Renderer
 
+> 核心问题：**已经找到真实组件以后，怎样用统一方式把 Props 交给组件并完成渲染？**
+
 状态：`PLANNED`
 
 所属章节：`Renderer / Design System`

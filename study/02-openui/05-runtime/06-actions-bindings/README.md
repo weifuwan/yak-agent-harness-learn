@@ -1,5 +1,7 @@
 # 06 · Actions / Bindings
 
+> 核心问题：**用户点击、输入等交互，怎样绑定到 Runtime 中可控、可执行的 Action？**
+
 状态：`PLANNED`
 
 所属章节：`Runtime`

@@ -1,5 +1,7 @@
 # 02 · Component Signature
 
+> 核心问题：**怎样用稳定格式描述组件名和 Props，让模型更容易正确使用组件？**
+
 状态：`PLANNED`
 
 所属章节：`Library → Prompt`

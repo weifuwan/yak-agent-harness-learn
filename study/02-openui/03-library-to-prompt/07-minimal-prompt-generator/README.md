@@ -1,5 +1,7 @@
 # 07 · Minimal Prompt Generator
 
+> 核心问题：**怎样从 Component Library 自动生成 Prompt，而不是人工复制和维护两份组件规则？**
+
 状态：`PLANNED`
 
 所属章节：`Library → Prompt`

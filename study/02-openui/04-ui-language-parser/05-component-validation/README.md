@@ -1,5 +1,7 @@
 # 05 · Component Validation
 
+> 核心问题：**AST 已经生成以后，怎么保证里面只使用了 Component Library 允许的组件？**
+
 状态：`PLANNED`
 
 所属章节：`UI Language / Parser`

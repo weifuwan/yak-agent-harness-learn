@@ -1,5 +1,7 @@
 # 02 · OpenUI · Frontend Harness
 
+> 核心问题：**为什么模型能生成前端，却很难稳定生成符合项目约束的前端？**
+
 状态：`CURRENT`
 
 参考项目：`thesysdev/openui`

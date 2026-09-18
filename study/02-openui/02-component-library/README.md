@@ -1,10 +1,8 @@
 # 02 · Component Library
 
+> 核心问题：**为什么不能让模型每次都自己发明 Button、Card、Table？**
+
 状态：`CURRENT`
-
-核心问题：
-
-> 模型为什么不能每次都自己发明 Button、Card、Table？
 
 这一章只建立一个最小组件库，不碰 Parser 和 Runtime。
 
