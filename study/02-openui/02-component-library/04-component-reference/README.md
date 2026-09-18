@@ -1,10 +1,10 @@
 # 04 · Component Reference
 
+> 核心问题：**抽象组件名怎么稳定连接到项目里的真实组件实现？**
+
 状态：`IMPLEMENTED · WAITING FOR RUN`
 
 所属章节：`Component Library`
-
-## 核心问题
 
 前面已经有：
 

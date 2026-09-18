@@ -1,8 +1,8 @@
 # 02 · Component Library
 
-状态：`CURRENT`
+> 核心问题：**为什么不能让模型每次都自己发明 Button、Card、Table？**
 
-核心问题：
+状态：`CURRENT`
 
 > 模型为什么不能每次都自己发明 Button、Card、Table？
 

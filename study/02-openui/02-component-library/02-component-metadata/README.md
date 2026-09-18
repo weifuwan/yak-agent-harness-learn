@@ -1,10 +1,10 @@
 # 02 · Component Metadata
 
+> 核心问题：**模型知道组件名以后，怎么知道每个组件到底是干什么的？**
+
 状态：`COMPLETE`
 
 所属章节：`Component Library`
-
-## 核心问题
 
 上一节只有：
 
