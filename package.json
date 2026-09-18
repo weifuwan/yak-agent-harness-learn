@@ -86,7 +86,14 @@
     "openui:02:03": "node --env-file=.env --import tsx study/02-openui/02-component-library/03-props-schema/index.ts",
     "openui:02:04": "node --env-file=.env --import tsx study/02-openui/02-component-library/04-component-reference/index.ts",
     "openui:02:05": "node --env-file=.env --import tsx study/02-openui/02-component-library/05-component-groups/index.ts",
-    "openui:02:06": "node --env-file=.env --import tsx study/02-openui/02-component-library/06-minimal-component-library/index.ts"
+    "openui:02:06": "node --env-file=.env --import tsx study/02-openui/02-component-library/06-minimal-component-library/index.ts",
+    "openui:03:01": "node --env-file=.env --import tsx study/02-openui/03-library-to-prompt/01-manual-component-prompt/index.ts",
+    "openui:03:02": "node --env-file=.env --import tsx study/02-openui/03-library-to-prompt/02-component-signature/index.ts",
+    "openui:03:03": "node --env-file=.env --import tsx study/02-openui/03-library-to-prompt/03-description-injection/index.ts",
+    "openui:03:04": "node --env-file=.env --import tsx study/02-openui/03-library-to-prompt/04-group-rules/index.ts",
+    "openui:03:05": "node --env-file=.env --import tsx study/02-openui/03-library-to-prompt/05-examples/index.ts",
+    "openui:03:06": "node --env-file=.env --import tsx study/02-openui/03-library-to-prompt/06-prompt-spec/index.ts",
+    "openui:03:07": "node --env-file=.env --import tsx study/02-openui/03-library-to-prompt/07-minimal-prompt-generator/index.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
